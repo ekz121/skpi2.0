@@ -57,9 +57,14 @@ Route::prefix('mahasiswa')->name('student.')->middleware(['auth', 'verified', 'r
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
-    Route::get('/verifikasi', [AdminController::class, 'submissions'])->name('submissions.index');
-    Route::get('/verifikasi/{submission}', [AdminController::class, 'showSubmission'])->name('submissions.show');
-    Route::put('/verifikasi/{submission}', [AdminController::class, 'decideSubmission'])->name('submissions.decide');
+    Route::get('/sertifikat', [AdminController::class, 'submissions'])->name('submissions.index');
+    Route::get('/sertifikat/baru', [AdminController::class, 'createSubmission'])->name('submissions.create');
+    Route::post('/sertifikat', [AdminController::class, 'storeSubmission'])->name('submissions.store');
+    Route::get('/sertifikat/{submission}', [AdminController::class, 'showSubmission'])->name('submissions.show');
+    Route::get('/sertifikat/{submission}/ubah', [AdminController::class, 'editSubmission'])->name('submissions.edit');
+    Route::put('/sertifikat/{submission}', [AdminController::class, 'updateSubmission'])->name('submissions.update');
+    Route::put('/sertifikat/{submission}/cek', [AdminController::class, 'checkSubmission'])->name('submissions.check');
+    Route::delete('/sertifikat/{submission}', [AdminController::class, 'destroySubmission'])->name('submissions.destroy');
     Route::get('/mahasiswa', [AdminController::class, 'students'])->name('students');
     Route::get('/skpi', [AdminController::class, 'skpiRequests'])->name('skpi.index');
     Route::post('/skpi/aksi-massal', [AdminController::class, 'bulkSkpi'])->name('skpi.bulk');

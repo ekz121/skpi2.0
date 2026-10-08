@@ -12,9 +12,9 @@
     <a href="#main-content" class="skip-link">Lewati ke formulir</a>
     <main id="main-content" class="auth-shell">
         <section class="auth-brand" aria-label="Tentang sistem">
-            <div class="brand-lockup brand-lockup-light">
+            <div class="brand-lockup brand-lockup-light auth-brand-lockup">
                 <span class="brand-logo-card auth-logo-card"><img src="{{ asset('assets/polteksi-logo-official.png') }}" alt="Logo Politeknik Semen Indonesia"></span>
-                <span><strong>POLTEKSI</strong><small>SKEM &amp; SKPI</small></span>
+                <span><strong>PORTAL AKADEMIK</strong><small>SKEM &amp; SKPI POLTEKSI</small></span>
             </div>
             <div class="auth-intro">
                 <p class="section-kicker">Politeknik Semen Indonesia</p>

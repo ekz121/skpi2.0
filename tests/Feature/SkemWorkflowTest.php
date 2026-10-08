@@ -80,27 +80,57 @@ class SkemWorkflowTest extends TestCase
         $this->assertSame(0, $student->submissions()->where('status', 'pending')->count());
     }
 
-    public function test_admin_approval_uses_points_from_the_rule_and_records_history(): void
+    public function test_admin_can_mark_an_auto_approved_certificate_as_checked(): void
     {
         $admin = User::where('role', 'admin')->firstOrFail();
         $submission = Submission::where('status', 'approved')->firstOrFail();
-        $this->actingAs($admin)->put(route('admin.submissions.decide', $submission), ['decision' => 'approved', 'note' => ''])
-            ->assertRedirect(route('admin.submissions.index'));
+        $points = $submission->approved_points;
+
+        $this->actingAs($admin)->put(route('admin.submissions.check', $submission))
+            ->assertRedirect();
+
         $submission->refresh();
         $this->assertSame('approved', $submission->status);
-        $this->assertSame($submission->rule->points, $submission->approved_points);
-        $this->assertDatabaseHas('submission_decisions', ['submission_id' => $submission->id, 'decision' => 'approved', 'points' => $submission->rule->points]);
+        $this->assertSame($points, $submission->approved_points);
+        $this->assertSame($admin->id, $submission->admin_checked_by);
+        $this->assertNotNull($submission->admin_checked_at);
     }
 
-    public function test_revision_and_rejection_require_an_admin_note(): void
+    public function test_admin_can_create_update_and_delete_certificate_data(): void
     {
+        Storage::fake('local');
         $admin = User::where('role', 'admin')->firstOrFail();
         $rule = ActivityRule::firstOrFail();
         $student = User::where('role', 'student')->firstOrFail();
-        $submission = Submission::create(['user_id' => $student->id, 'activity_rule_id' => $rule->id, 'activity_name' => 'Data lama', 'organizer' => 'Penguji', 'started_at' => now()->subDay(), 'status' => 'pending', 'estimated_points' => $rule->points]);
-        $this->actingAs($admin)->from(route('admin.submissions.show', $submission))
-            ->put(route('admin.submissions.decide', $submission), ['decision' => 'revision', 'note' => ''])
-            ->assertRedirect(route('admin.submissions.show', $submission))->assertSessionHasErrors('note');
+
+        $this->actingAs($admin)->post(route('admin.submissions.store'), [
+            'user_id' => $student->id,
+            'activity_rule_id' => $rule->id,
+            'activity_name' => 'Sertifikat dari admin',
+            'organizer' => 'Panitia kampus',
+            'started_at' => now()->subDay()->format('Y-m-d'),
+            'certificate_number' => 'ADMIN-CERT-001',
+            'evidence' => UploadedFile::fake()->create('bukti-admin.pdf', 120, 'application/pdf'),
+        ])->assertSessionHasNoErrors();
+
+        $submission = Submission::where('certificate_number', 'ADMIN-CERT-001')->firstOrFail();
+        $this->assertSame('approved', $submission->status);
+        $this->assertNotNull($submission->admin_checked_at);
+
+        $this->put(route('admin.submissions.update', $submission), [
+            'user_id' => $student->id,
+            'activity_rule_id' => $rule->id,
+            'activity_name' => 'Sertifikat diperbarui admin',
+            'organizer' => 'Panitia kampus',
+            'started_at' => now()->subDay()->format('Y-m-d'),
+            'certificate_number' => 'ADMIN-CERT-001',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('submissions', ['id' => $submission->id, 'activity_name' => 'Sertifikat diperbarui admin', 'status' => 'approved']);
+
+        $evidencePath = $submission->fresh()->evidence_path;
+        $this->delete(route('admin.submissions.destroy', $submission))->assertRedirect(route('admin.submissions.index'));
+        $this->assertDatabaseMissing('submissions', ['id' => $submission->id]);
+        Storage::disk('local')->assertMissing($evidencePath);
     }
 
     public function test_student_cannot_open_another_students_submission(): void
@@ -266,6 +296,7 @@ class SkemWorkflowTest extends TestCase
 
         foreach ([
             route('admin.dashboard'), route('admin.submissions.index'), route('admin.submissions.show', $submission),
+            route('admin.submissions.create'), route('admin.submissions.edit', $submission),
             route('admin.students'), route('admin.skpi.index'),
         ] as $url) {
             $this->get($url)->assertOk();

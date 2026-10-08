@@ -44,11 +44,11 @@ Sebelum penggunaan produksi:
 - pastikan tahun lulus, nomor ijazah, dan gelar akademik tersedia;
 - konfigurasi email dan penyimpanan privat kampus.
 
-Sistem menolak penerbitan jika data wajib tersebut belum lengkap. Sertifikat baru langsung tersimpan tanpa menunggu verifikasi admin, dan satu sertifikat sudah cukup untuk mengirim permintaan SKPI.
+Sistem menolak penerbitan jika data wajib tersebut belum lengkap. Sertifikat baru langsung aktif tanpa menunggu keputusan admin, dan satu sertifikat sudah cukup untuk mengirim permintaan SKPI. Admin tetap menerima seluruh unggahan pada menu **Sertifikat Masuk**, dapat memfilter data baru atau sudah dicek, membuka bukti, menandai pemeriksaan, serta menambah, mengubah, atau menghapus data sertifikat.
 
 ## Pengujian
 
-Jalankan `php artisan test`. Pengujian mencakup role, unggahan langsung, isolasi data, keputusan tunggal dan massal, render halaman, serta penerbitan Word/PDF.
+Jalankan `php artisan test`. Pengujian mencakup role, unggahan langsung, pemeriksaan dan CRUD sertifikat admin, isolasi data, keputusan SKPI tunggal dan massal, render halaman, serta penerbitan Word/PDF.
 
 <details>
 <summary>Catatan framework Laravel</summary>

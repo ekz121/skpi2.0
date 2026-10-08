@@ -1,6 +1,8 @@
 import { writeFile } from 'node:fs/promises';
 
 const endpoint = 'http://127.0.0.1:9222';
+const adminPassword = process.env.VISUAL_ADMIN_PASSWORD;
+if (!adminPassword) throw new Error('VISUAL_ADMIN_PASSWORD is required.');
 const target = await fetch(`${endpoint}/json/new?${encodeURIComponent('http://127.0.0.1:8000/masuk')}`, { method: 'PUT' }).then((response) => response.json());
 const socket = new WebSocket(target.webSocketDebuggerUrl);
 const pending = new Map();
@@ -127,7 +129,7 @@ await pageNavigation;
 pageNavigation = waitFor('Page.loadEventFired');
 await evaluate(`(() => {
     document.querySelector('[name="email"]').value = 'admin@polteksi.ac.id';
-    document.querySelector('[name="password"]').value = 'polteksi123';
+    document.querySelector('[name="password"]').value = ${JSON.stringify(adminPassword)};
     document.querySelector('form').requestSubmit();
 })()`);
 await pageNavigation;

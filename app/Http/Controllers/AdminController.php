@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppNotification;
+use App\Models\ActivityRule;
 use App\Models\SkpiRequest;
 use App\Models\Submission;
-use App\Models\SubmissionDecision;
 use App\Models\User;
 use App\Notifications\SkpiStatusNotification;
 use App\Services\SkpiDocumentService;
@@ -26,73 +26,159 @@ class AdminController extends Controller
         return view('admin.dashboard', [
             'pendingCount' => SkpiRequest::where('status', 'pending')->count(),
             'issuedCount' => SkpiRequest::where('status', 'issued')->count(),
-            'rejectedCount' => SkpiRequest::where('status', 'rejected')->count(),
-            'failedCount' => SkpiRequest::where('status', 'failed')->count(),
-            'statusCounts' => SkpiRequest::select('status', DB::raw('count(*) as total'))->groupBy('status')->pluck('total', 'status'),
+            'newCertificateCount' => Submission::whereNull('admin_checked_at')->count(),
+            'checkedCertificateCount' => Submission::whereNotNull('admin_checked_at')->count(),
             'recentRequests' => SkpiRequest::with('user.profile.studyProgram')->where('status', 'pending')->oldest()->limit(8)->get(),
+            'recentCertificates' => Submission::with('user.profile.studyProgram', 'rule')->whereNull('admin_checked_at')->latest('submitted_at')->limit(8)->get(),
         ]);
     }
 
     public function submissions(Request $request)
     {
-        $query = Submission::with('user.profile.studyProgram', 'rule')->latest('submitted_at');
-        if ($request->filled('status')) {
-            $query->where('status', $request->string('status'));
+        $query = Submission::with('user.profile.studyProgram', 'rule', 'checker')->latest('submitted_at');
+        if ($request->input('review') === 'new') {
+            $query->whereNull('admin_checked_at');
+        } elseif ($request->input('review') === 'checked') {
+            $query->whereNotNull('admin_checked_at');
         }
         if ($request->filled('q')) {
-            $query->whereHas('user', fn ($user) => $user->where('name', 'like', '%'.$request->string('q').'%'));
+            $term = '%'.(string) $request->string('q').'%';
+            $query->where(function ($builder) use ($term) {
+                $builder->where('activity_name', 'like', $term)
+                    ->orWhere('certificate_number', 'like', $term)
+                    ->orWhereHas('user', fn ($user) => $user->where('name', 'like', $term)
+                        ->orWhereHas('profile', fn ($profile) => $profile->where('nim', 'like', $term)));
+            });
+        }
+        if ($request->filled('category')) {
+            $query->whereHas('rule', fn ($rule) => $rule->where('category', $request->string('category')));
         }
 
-        return view('admin.submissions.index', ['submissions' => $query->paginate(12)->withQueryString()]);
+        return view('admin.submissions.index', [
+            'submissions' => $query->paginate(25)->withQueryString(),
+            'categories' => ActivityRule::where('is_active', true)->distinct()->orderBy('category')->pluck('category'),
+            'newCount' => Submission::whereNull('admin_checked_at')->count(),
+        ]);
     }
 
     public function showSubmission(Submission $submission)
     {
-        return view('admin.submissions.show', ['submission' => $submission->load('user.profile.studyProgram', 'rule', 'decisions.admin')]);
+        return view('admin.submissions.show', ['submission' => $submission->load('user.profile.studyProgram', 'rule', 'checker')]);
     }
 
-    public function decideSubmission(Request $request, Submission $submission)
+    public function createSubmission()
     {
-        abort_unless(in_array($submission->status, ['pending', 'approved'], true), 422);
-        $data = $request->validate([
-            'decision' => ['required', Rule::in(['approved', 'revision', 'rejected'])],
-            'note' => [Rule::requiredIf(fn () => in_array($request->input('decision'), ['revision', 'rejected'], true)), 'nullable', 'string', 'max:1000'],
+        return view('admin.submissions.form', [
+            'submission' => new Submission,
+            'students' => User::where('role', 'student')->with('profile.studyProgram')->orderBy('name')->get(),
+            'rules' => ActivityRule::where('is_active', true)->orderBy('category')->orderBy('subcategory')->orderByDesc('points')->get(),
+        ]);
+    }
+
+    public function storeSubmission(Request $request)
+    {
+        return $this->persistSubmission($request, new Submission);
+    }
+
+    public function editSubmission(Submission $submission)
+    {
+        return view('admin.submissions.form', [
+            'submission' => $submission->load('user.profile.studyProgram'),
+            'students' => User::where('role', 'student')->with('profile.studyProgram')->orderBy('name')->get(),
+            'rules' => ActivityRule::where('is_active', true)->orderBy('category')->orderBy('subcategory')->orderByDesc('points')->get(),
+        ]);
+    }
+
+    public function updateSubmission(Request $request, Submission $submission)
+    {
+        return $this->persistSubmission($request, $submission);
+    }
+
+    public function checkSubmission(Request $request, Submission $submission)
+    {
+        $submission->update([
+            'admin_checked_by' => $request->user()->id,
+            'admin_checked_at' => now(),
         ]);
 
-        DB::transaction(function () use ($data, $submission, $request) {
-            $points = $data['decision'] === 'approved' ? $submission->rule->points : null;
-            $submission->update([
-                'status' => $data['decision'],
-                'approved_points' => $points,
-                'admin_note' => $data['note'] ?? null,
-                'verified_by' => $request->user()->id,
-                'verified_at' => now(),
-            ]);
+        return back()->with('success', 'Sertifikat ditandai sudah diperiksa. Status mahasiswa tetap langsung aktif.');
+    }
 
-            SubmissionDecision::create([
-                'submission_id' => $submission->id,
-                'admin_id' => $request->user()->id,
-                'decision' => $data['decision'],
-                'note' => $data['note'] ?? null,
-                'points' => $points,
-            ]);
+    public function destroySubmission(Submission $submission)
+    {
+        $userId = $submission->user_id;
+        $evidencePath = $submission->evidence_path;
+        $submission->delete();
+        if ($evidencePath) {
+            Storage::disk('local')->delete($evidencePath);
+        }
+        AppNotification::create([
+            'user_id' => $userId,
+            'title' => 'Data sertifikat dihapus admin',
+            'message' => 'Satu data sertifikat dihapus dari rekap. Hubungi admin jika Anda memerlukan penjelasan.',
+            'url' => route('student.submissions.index'),
+        ]);
 
-            $labels = [
-                'approved' => 'Pengajuan disetujui',
-                'revision' => 'Pengajuan perlu diperbaiki',
-                'rejected' => 'Pengajuan ditolak',
-            ];
-            AppNotification::create([
-                'user_id' => $submission->user_id,
-                'title' => $labels[$data['decision']],
-                'message' => $data['decision'] === 'approved'
-                    ? 'Poin '.$points.' telah ditambahkan ke rekap Anda.'
-                    : ($data['note'] ?? 'Silakan periksa detail pengajuan.'),
-                'url' => route('student.submissions.show', $submission),
-            ]);
-        });
+        return redirect()->route('admin.submissions.index')->with('success', 'Data sertifikat dan berkas buktinya berhasil dihapus.');
+    }
 
-        return redirect()->route('admin.submissions.index')->with('success', 'Keputusan berhasil disimpan dan mahasiswa telah diberi notifikasi.');
+    private function persistSubmission(Request $request, Submission $submission)
+    {
+        $data = $request->validate([
+            'user_id' => ['required', Rule::exists('users', 'id')->where('role', 'student')],
+            'activity_rule_id' => ['required', Rule::exists('activity_rules', 'id')->where('is_active', true)],
+            'activity_name' => ['required', 'string', 'max:180'],
+            'organizer' => ['required', 'string', 'max:180'],
+            'started_at' => ['required', 'date', 'before_or_equal:today'],
+            'ended_at' => ['nullable', 'date', 'after_or_equal:started_at'],
+            'certificate_number' => ['nullable', 'string', 'max:100'],
+            'verification_url' => ['nullable', 'url', 'max:500'],
+            'evidence' => [$submission->evidence_path ? 'nullable' : 'required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+        ]);
+
+        if (filled($data['certificate_number'] ?? null)) {
+            $duplicate = Submission::where('user_id', $data['user_id'])
+                ->where('certificate_number', $data['certificate_number'])
+                ->when($submission->exists, fn ($query) => $query->whereKeyNot($submission->id))
+                ->exists();
+            if ($duplicate) {
+                return back()->withErrors(['certificate_number' => 'Nomor sertifikat ini sudah terdaftar untuk mahasiswa tersebut.'])->withInput();
+            }
+        }
+
+        $rule = ActivityRule::findOrFail($data['activity_rule_id']);
+        $oldEvidence = $submission->evidence_path;
+        unset($data['evidence']);
+        $data['status'] = 'approved';
+        $data['estimated_points'] = $rule->points;
+        $data['approved_points'] = $rule->points;
+        $data['submitted_at'] = $submission->submitted_at ?: now();
+        $data['verified_at'] = $submission->verified_at ?: now();
+        $data['verified_by'] = null;
+        $data['admin_note'] = null;
+        $data['admin_checked_by'] = $request->user()->id;
+        $data['admin_checked_at'] = now();
+
+        if ($request->hasFile('evidence')) {
+            $data['evidence_path'] = $request->file('evidence')->store('evidence/'.$data['user_id']);
+            $data['evidence_original_name'] = $request->file('evidence')->getClientOriginalName();
+        }
+
+        $wasExisting = $submission->exists;
+        $submission->fill($data)->save();
+        if ($request->hasFile('evidence') && $oldEvidence && $oldEvidence !== $submission->evidence_path) {
+            Storage::disk('local')->delete($oldEvidence);
+        }
+
+        AppNotification::create([
+            'user_id' => $submission->user_id,
+            'title' => $wasExisting ? 'Data sertifikat diperbarui admin' : 'Sertifikat ditambahkan admin',
+            'message' => 'Sertifikat tetap aktif dan dapat digunakan untuk pengajuan SKPI.',
+            'url' => route('student.submissions.show', $submission),
+        ]);
+
+        return redirect()->route('admin.submissions.show', $submission)
+            ->with('success', $wasExisting ? 'Data sertifikat berhasil diperbarui.' : 'Sertifikat berhasil ditambahkan dan langsung aktif.');
     }
 
     public function students(Request $request)

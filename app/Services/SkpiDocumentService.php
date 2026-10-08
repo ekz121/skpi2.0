@@ -76,7 +76,7 @@ class SkpiDocumentService
                 'name' => $activity->activity_name,
                 'organizer' => $activity->organizer,
                 'year' => $activity->started_at->year,
-                'points' => $activity->approved_points,
+                'points' => $activity->approved_points ?? $activity->estimated_points,
             ])->values()->all(),
         ];
     }

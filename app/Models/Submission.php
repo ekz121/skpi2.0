@@ -14,6 +14,7 @@ class Submission extends Model
             'started_at' => 'date',
             'ended_at' => 'date',
             'verified_at' => 'datetime',
+            'admin_checked_at' => 'datetime',
             'submitted_at' => 'datetime',
         ];
     }
@@ -31,6 +32,11 @@ class Submission extends Model
     public function verifier()
     {
         return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function checker()
+    {
+        return $this->belongsTo(User::class, 'admin_checked_by');
     }
 
     public function decisions()

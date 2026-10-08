@@ -26,6 +26,7 @@
                 <span class="nav-label">Ruang kerja</span>
                 @if(auth()->user()->isAdmin())
                     <a href="{{ route('admin.dashboard') }}" class="nav-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">@include('partials.icon', ['name' => 'dashboard'])<span>Dashboard</span></a>
+                    <a href="{{ route('admin.submissions.index', ['review' => 'new']) }}" class="nav-item {{ request()->routeIs('admin.submissions.*') ? 'active' : '' }}">@include('partials.icon', ['name' => 'certificate'])<span>Sertifikat Masuk</span></a>
                     <a href="{{ route('admin.students') }}" class="nav-item {{ request()->routeIs('admin.students') ? 'active' : '' }}">@include('partials.icon', ['name' => 'users'])<span>Rekap Mahasiswa</span></a>
                     <a href="{{ route('admin.skpi.index') }}" class="nav-item {{ request()->routeIs('admin.skpi.*') ? 'active' : '' }}">@include('partials.icon', ['name' => 'document'])<span>Permintaan SKPI</span></a>
                 @else

@@ -143,14 +143,10 @@ if (wizard) {
     });
 }
 
-document.querySelectorAll('[data-decision-form]').forEach((form) => {
-    const select = form.querySelector('[data-decision-select]');
-    const note = form.querySelector('[data-decision-note]');
-    const syncRequired = () => {
-        note.required = ['revision', 'rejected'].includes(select.value);
-    };
-    select.addEventListener('change', syncRequired);
-    syncRequired();
+document.querySelectorAll('[data-confirm]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+    });
 });
 
 document.querySelectorAll('[data-bulk-form]').forEach((form) => {
