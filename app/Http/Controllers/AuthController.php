@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentProfile;
-use App\Models\StudyProgram;
+use App\Models\StudentRegistry;
 use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Throwable;
 
@@ -42,23 +43,33 @@ class AuthController extends Controller
 
     public function registerForm()
     {
-        return view('auth.register', ['programs' => StudyProgram::orderBy('name')->get()]);
+        return view('auth.register', [
+            'students' => StudentRegistry::with('studyProgram')
+                ->whereNull('user_id')
+                ->orderBy('name')
+                ->get(),
+        ]);
     }
 
     public function register(Request $request)
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:150'],
-            'nim' => ['required', 'string', 'max:30', 'unique:student_profiles,nim'],
-            'study_program_id' => ['required', 'exists:study_programs,id'],
-            'cohort' => ['required', 'integer', 'between:2018,'.now()->year],
+            'student_registry_id' => [
+                'required',
+                Rule::exists('student_registries', 'id')->whereNull('user_id'),
+            ],
             'email' => ['required', 'email', 'max:190', 'unique:users,email'],
-            'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()],
+            'password' => ['required', PasswordRule::min(8)->letters()->numbers()],
         ]);
 
         $user = DB::transaction(function () use ($data) {
+            $registry = StudentRegistry::with('studyProgram')
+                ->whereKey($data['student_registry_id'])
+                ->whereNull('user_id')
+                ->lockForUpdate()
+                ->firstOrFail();
             $user = User::create([
-                'name' => $data['name'],
+                'name' => $registry->name,
                 'email' => $data['email'],
                 'password' => $data['password'],
                 'role' => 'student',
@@ -66,10 +77,14 @@ class AuthController extends Controller
 
             StudentProfile::create([
                 'user_id' => $user->id,
-                'study_program_id' => $data['study_program_id'],
-                'nim' => $data['nim'],
-                'cohort' => $data['cohort'],
+                'study_program_id' => $registry->study_program_id,
+                'nim' => $registry->nim,
+                'cohort' => $registry->cohort,
+                'graduation_year' => $registry->graduation_year,
+                'diploma_number' => $registry->diploma_number,
+                'academic_title' => $registry->studyProgram->academic_title,
             ]);
+            $registry->update(['user_id' => $user->id]);
 
             return $user;
         });

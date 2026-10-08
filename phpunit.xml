@@ -32,7 +32,6 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
-        <env name="SKPI_OFFICE_BINARY" value="disabled"/>
         <env name="SKPI_SIGNATORY_NAME" value="Pejabat Penguji"/>
         <env name="SKPI_SIGNATORY_NIDN" value="0000000000"/>
     </php>

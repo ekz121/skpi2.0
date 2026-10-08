@@ -9,14 +9,10 @@ use DOMDocument;
 use DOMElement;
 use DOMNode;
 use DOMXPath;
-use Dompdf\Dompdf;
-use Dompdf\Options;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
-use Symfony\Component\Process\Process;
 use ZipArchive;
 
 class SkpiDocumentService
@@ -37,18 +33,13 @@ class SkpiDocumentService
             $safeNim = preg_replace('/[^A-Za-z0-9_-]/', '-', (string) $snapshot['nim']) ?: (string) $skpiRequest->id;
             $baseName = 'SKPI-'.$safeNim;
             $temporaryDocx = $temporaryDirectory.DIRECTORY_SEPARATOR.$baseName.'.docx';
-            $temporaryPdf = $temporaryDirectory.DIRECTORY_SEPARATOR.$baseName.'.pdf';
-
             $this->buildDocx($temporaryDocx, $snapshot, $number);
-            $this->buildPdf($temporaryDocx, $temporaryPdf, $snapshot, $number);
 
             $directory = 'skpi/'.$user->id;
             $docxPath = $directory.'/SKPI-'.$skpiRequest->id.'.docx';
-            $pdfPath = $directory.'/SKPI-'.$skpiRequest->id.'.pdf';
             Storage::disk('local')->put($docxPath, File::get($temporaryDocx));
-            Storage::disk('local')->put($pdfPath, File::get($temporaryPdf));
 
-            return compact('number', 'snapshot', 'docxPath', 'pdfPath');
+            return compact('number', 'snapshot', 'docxPath');
         } finally {
             File::deleteDirectory($temporaryDirectory);
         }
@@ -126,57 +117,6 @@ class SkpiDocumentService
         }
     }
 
-    private function buildPdf(string $docx, string $destination, array $snapshot, string $number): void
-    {
-        $binary = $this->officeBinary();
-        if ($binary) {
-            try {
-                $process = new Process([$binary, '--headless', '--convert-to', 'pdf', '--outdir', dirname($destination), $docx]);
-                $process->setTimeout(120);
-                $process->mustRun();
-                if (is_file($destination) && filesize($destination) > 0) {
-                    return;
-                }
-            } catch (\Throwable $exception) {
-                Log::warning('Konversi template SKPI melalui office gagal, menggunakan renderer cadangan.', [
-                    'error' => $exception->getMessage(),
-                ]);
-            }
-        }
-
-        $options = new Options;
-        $options->set('isRemoteEnabled', false);
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml(view('pdf.skpi', compact('snapshot', 'number'))->render());
-        $dompdf->setPaper('A4');
-        $dompdf->render();
-        File::put($destination, $dompdf->output());
-    }
-
-    private function officeBinary(): ?string
-    {
-        $configured = config('skpi.office_binary');
-        if ($configured === 'disabled') {
-            return null;
-        }
-        if (is_string($configured) && $configured !== '' && is_file($configured)) {
-            return $configured;
-        }
-
-        foreach ([
-            'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
-            'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
-            '/usr/bin/libreoffice',
-            '/usr/bin/soffice',
-        ] as $candidate) {
-            if (is_file($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
-    }
-
     private function fillIdentityTable(DOMXPath $xpath, array $snapshot): void
     {
         $values = [
@@ -235,6 +175,7 @@ class SkpiDocumentService
             foreach ($items as $index => $item) {
                 if (isset($paragraphs[$index])) {
                     $this->setNodeText($xpath, $paragraphs[$index], (string) $item);
+
                     continue;
                 }
                 $clone = $template->cloneNode(true);
@@ -285,6 +226,7 @@ class SkpiDocumentService
                 $emptyRow = $templateRow->cloneNode(true);
                 $this->fillActivityRow($xpath, $emptyRow, ['', '', '', '', '']);
                 $table->appendChild($emptyRow);
+
                 continue;
             }
 

@@ -57,10 +57,50 @@ await initialNavigation;
 const loginLoaded = await evaluate(`Boolean(document.querySelector('form') && document.querySelector('[name="email"]'))`);
 if (!loginLoaded) throw new Error('Login page did not load.');
 const loginControls = await evaluate(`({ autoFillButtons: document.querySelectorAll('[data-fill-login]').length, logoLoaded: document.querySelector('.brand-logo-card img')?.complete })`);
+await evaluate(`(() => { document.documentElement.dataset.theme = 'light'; localStorage.setItem('skem-theme', 'light'); })()`);
+await screenshot('storage/app/visual-login-desktop.png');
+
+await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 900, deviceScaleFactor: 1, mobile: false });
+let pageNavigation = waitFor('Page.loadEventFired');
+await send('Page.navigate', { url: 'http://127.0.0.1:8000/daftar' });
+await pageNavigation;
+const registrationDesktop = await evaluate(`(() => {
+    const select = document.querySelector('[data-student-registry]');
+    const option = [...select.options].find((item) => item.value);
+    select.value = option.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const password = document.querySelector('[data-password-input]');
+    const toggle = document.querySelector('[data-password-toggle]');
+    toggle.click();
+    const logo = document.querySelector('.brand-logo-card img');
+    return {
+        choices: select.options.length - 1,
+        nim: document.querySelector('[data-registry-nim]').textContent.trim(),
+        program: document.querySelector('[data-registry-program]').textContent.trim(),
+        cohort: document.querySelector('[data-registry-cohort]').textContent.trim(),
+        passwordVisible: password.type === 'text',
+        manualNimInput: Boolean(document.querySelector('[name="nim"]')),
+        scrollWidth: document.documentElement.scrollWidth,
+        width: innerWidth,
+        logo: { loaded: logo.complete && logo.naturalWidth > 0, fit: getComputedStyle(logo).objectFit },
+    };
+})()`);
+await screenshot('storage/app/visual-registration-desktop.png');
+
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await send('Page.reload', { ignoreCache: true });
+await waitFor('Page.loadEventFired');
+const registrationMobile = await evaluate(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth, fields: document.querySelectorAll('form input, form select').length })`);
+await screenshot('storage/app/visual-registration-mobile.png');
+
+await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 900, deviceScaleFactor: 1, mobile: false });
+pageNavigation = waitFor('Page.loadEventFired');
+await send('Page.navigate', { url: 'http://127.0.0.1:8000/masuk' });
+await pageNavigation;
 
 const navigation = waitFor('Page.loadEventFired');
 await evaluate(`(() => {
-    document.querySelector('[name="email"]').value = 'mahasiswa@demo.polteksi.ac.id';
+    document.querySelector('[name="email"]').value = 'demo01@demo.polteksi.ac.id';
     document.querySelector('[name="password"]').value = 'demo12345';
     document.querySelector('form').requestSubmit();
 })()`);
@@ -87,7 +127,7 @@ const menuInteraction = await evaluate(`(() => {
 })()`);
 
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-let pageNavigation = waitFor('Page.loadEventFired');
+pageNavigation = waitFor('Page.loadEventFired');
 await send('Page.navigate', { url: 'http://127.0.0.1:8000/mahasiswa/pengajuan/baru' });
 await pageNavigation;
 const wizardInteraction = await evaluate(`(() => {
@@ -124,6 +164,22 @@ const guideInteraction = await evaluate(`(() => {
 })()`);
 
 pageNavigation = waitFor('Page.loadEventFired');
+await send('Page.navigate', { url: 'http://127.0.0.1:8000/mahasiswa/skpi' });
+await pageNavigation;
+const skpiRequestForm = await evaluate(`(() => {
+    const form = document.querySelector('.skpi-request-form, .reapply-form');
+    if (!form) return { available: false, fields: 0 };
+    form.querySelector('[name="birthplace"]').value = 'Surabaya';
+    form.querySelector('[name="birthdate"]').value = '2004-01-01';
+    return { available: true, fields: form.querySelectorAll('input:not([type="hidden"])').length };
+})()`);
+if (skpiRequestForm.available) {
+    pageNavigation = waitFor('Page.loadEventFired');
+    await evaluate(`document.querySelector('.skpi-request-form, .reapply-form').requestSubmit()`);
+    await pageNavigation;
+}
+
+pageNavigation = waitFor('Page.loadEventFired');
 await evaluate(`document.querySelector('form[action$="/keluar"]').requestSubmit()`);
 await pageNavigation;
 pageNavigation = waitFor('Page.loadEventFired');
@@ -141,6 +197,10 @@ await screenshot('storage/app/visual-dashboard-dark.png');
 pageNavigation = waitFor('Page.loadEventFired');
 await send('Page.navigate', { url: 'http://127.0.0.1:8000/admin/skpi' });
 await pageNavigation;
+const adminSearch = await evaluate(`({
+    available: Boolean(document.querySelector('[name="q"]')),
+    placeholder: document.querySelector('[name="q"]')?.placeholder || '',
+})`);
 const bulkInteraction = await evaluate(`(() => {
     const form = document.querySelector('[data-bulk-form]');
     if (!form) return { available: false };
@@ -154,7 +214,7 @@ const bulkInteraction = await evaluate(`(() => {
     };
 })()`);
 await screenshot('storage/app/visual-skpi-admin-list.png');
-const firstRequestUrl = await evaluate(`document.querySelector('a[href*="/admin/skpi/"]:not([href*="/unduh/"])')?.href`);
+const firstRequestUrl = await evaluate(`document.querySelector('a[href*="/admin/skpi/"]:not([href$="/unduh"])')?.href`);
 let adminDecision = { available: false };
 if (firstRequestUrl) {
     pageNavigation = waitFor('Page.loadEventFired');
@@ -164,10 +224,10 @@ if (firstRequestUrl) {
         available: true,
         selectInputs: document.querySelectorAll('[data-decision-select], [data-decision-note]').length,
         decisionButtons: document.querySelectorAll('[name="decision"]').length,
-        downloadLinks: document.querySelectorAll('a[href*="/unduh/"]').length,
+        downloadLinks: document.querySelectorAll('a[href$="/unduh"]').length,
     })`);
     await screenshot('storage/app/visual-skpi-admin-detail.png');
 }
 
-console.log(JSON.stringify({ loginControls, desktop, mobile, menuInteraction, wizardInteraction, guideInteraction, admin, darkTheme, bulkInteraction, adminDecision, issues: issues.length }, null, 2));
+console.log(JSON.stringify({ loginControls, registrationDesktop, registrationMobile, desktop, mobile, menuInteraction, wizardInteraction, guideInteraction, skpiRequestForm, admin, darkTheme, adminSearch, bulkInteraction, adminDecision, issues: issues.length }, null, 2));
 socket.close();

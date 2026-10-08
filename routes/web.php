@@ -48,11 +48,12 @@ Route::prefix('mahasiswa')->name('student.')->middleware(['auth', 'verified', 'r
     Route::get('/pengajuan/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');
     Route::get('/pengajuan/{submission}/ubah', [SubmissionController::class, 'edit'])->name('submissions.edit');
     Route::put('/pengajuan/{submission}', [SubmissionController::class, 'update'])->name('submissions.update');
+    Route::delete('/pengajuan/{submission}', [SubmissionController::class, 'destroy'])->name('submissions.destroy');
     Route::get('/rekap-poin', [StudentController::class, 'recap'])->name('recap');
     Route::get('/panduan', [StudentController::class, 'guide'])->name('guide');
     Route::get('/skpi', [StudentController::class, 'skpi'])->name('skpi');
     Route::post('/skpi', [StudentController::class, 'requestSkpi'])->name('skpi.request');
-    Route::get('/skpi/{skpiRequest}/unduh/{format}', [StudentController::class, 'downloadSkpi'])->whereIn('format', ['pdf', 'docx'])->name('skpi.download');
+    Route::get('/skpi/{skpiRequest}/unduh', [StudentController::class, 'downloadSkpi'])->name('skpi.download');
 });
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->group(function () {
@@ -68,7 +69,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->grou
     Route::get('/mahasiswa', [AdminController::class, 'students'])->name('students');
     Route::get('/skpi', [AdminController::class, 'skpiRequests'])->name('skpi.index');
     Route::post('/skpi/aksi-massal', [AdminController::class, 'bulkSkpi'])->name('skpi.bulk');
-    Route::get('/skpi/{skpiRequest}/unduh/{format}', [AdminController::class, 'downloadSkpi'])->whereIn('format', ['pdf', 'docx'])->name('skpi.download');
+    Route::get('/skpi/{skpiRequest}/unduh', [AdminController::class, 'downloadSkpi'])->name('skpi.download');
     Route::get('/skpi/{skpiRequest}', [AdminController::class, 'showSkpi'])->name('skpi.show');
     Route::put('/skpi/{skpiRequest}', [AdminController::class, 'updateSkpi'])->name('skpi.update');
 });

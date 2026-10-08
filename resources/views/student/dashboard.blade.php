@@ -13,7 +13,7 @@
             <span class="metric-label" id="activity-summary-title">Kegiatan tersimpan</span>
             <div class="point-total"><strong>{{ $activityCount }}</strong><span>sertifikat</span></div>
             <div class="progress-track large"><span style="width: {{ $activityCount > 0 ? 100 : 0 }}%"></span></div>
-            <p>{{ $activityCount > 0 ? 'Syarat unggahan terpenuhi. Lengkapi profil lalu kirim permintaan SKPI.' : 'Unggah satu sertifikat untuk membuka pengajuan SKPI.' }}</p>
+            <p>{{ $activityCount > 0 ? 'Syarat unggahan terpenuhi. Isi tempat dan tanggal lahir saat mengajukan SKPI.' : 'Unggah satu sertifikat untuk membuka pengajuan SKPI.' }}</p>
         </div>
         <div class="eligibility-panel {{ $activityCount > 0 ? 'complete' : '' }}">
             <span class="eligibility-icon">@include('partials.icon', ['name' => $activityCount > 0 ? 'check' : 'clock'])</span>

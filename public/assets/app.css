@@ -71,8 +71,8 @@ p { color: var(--muted); }
 .sidebar { position: sticky; top: 0; z-index: 30; display: flex; flex-direction: column; height: 100dvh; padding: 20px 14px 14px; border-right: 1px solid var(--border); background: var(--surface); }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 28px; }
 .brand-lockup { display: inline-flex; align-items: center; gap: 11px; color: var(--text); text-decoration: none; }
-.brand-logo-card { display: grid; flex: 0 0 52px; width: 52px; height: 52px; place-items: start center; overflow: hidden; border: 1px solid #d5d9e0; border-radius: 9px; background: #fff; }
-.brand-logo-card img { display: block; width: 65px; max-width: none; height: auto; transform: translateY(-2px); }
+.brand-logo-card { display: grid; flex: 0 0 52px; width: 52px; height: 52px; padding: 5px; place-items: center; overflow: hidden; border: 1px solid #d5d9e0; border-radius: 9px; background: #fff; }
+.brand-logo-card img { display: block; width: 100%; max-width: 100%; height: 100%; object-fit: contain; transform: none; }
 .brand-lockup strong, .brand-lockup small { display: block; }
 .brand-lockup strong { font-size: .94rem; letter-spacing: .04em; }
 .brand-lockup small { margin-top: -2px; color: var(--muted); font-size: .68rem; }
@@ -439,6 +439,17 @@ tbody tr:hover { background: color-mix(in srgb, var(--primary-soft) 35%, transpa
 .auth-heading p:last-child { margin-bottom: 0; }
 .auth-switch { margin: 22px 0 0; text-align: center; }
 .auth-switch a { color: var(--primary); font-weight: 700; }
+.registration-preview { display: grid; grid-template-columns: minmax(110px, .7fr) minmax(170px, 1.3fr) minmax(84px, .55fr); gap: 1px; overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--border); }
+.registration-preview > div { min-width: 0; padding: 11px 12px; background: var(--surface-soft); }
+.registration-preview small, .registration-preview strong { display: block; }
+.registration-preview small { color: var(--muted); font-size: .7rem; }
+.registration-preview strong { overflow-wrap: anywhere; font-size: .82rem; }
+.password-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.password-field input { min-width: 0; border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.password-field button { min-width: 88px; border: 1px solid var(--border-strong); border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--surface-soft); color: var(--primary); font-weight: 700; cursor: pointer; }
+.record-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.record-actions form { margin: 0; }
+.skpi-request-form { margin-top: 18px; }
 .verification-note { margin-bottom: 18px; }
 
 .page-loader { position: fixed; inset: 0 0 auto; z-index: 200; height: 3px; pointer-events: none; opacity: 0; }
@@ -516,6 +527,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--primary-soft) 35%, transpa
     .inbox-summary { align-items: flex-start; flex-direction: column; }
     .form-actions { display: grid; grid-template-columns: 1fr; }
     .form-actions .button { width: 100%; }
+    .registration-preview { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {
@@ -523,8 +535,8 @@ tbody tr:hover { background: color-mix(in srgb, var(--primary-soft) 35%, transpa
     .topbar-actions { gap: 6px; }
     .page-heading { margin-top: 8px; }
     .progress-overview { padding: 18px; }
-    .eligibility-panel { grid-template-columns: 42px minmax(0, 1fr); }
-    .eligibility-panel > a { grid-column: 1 / -1; width: 100%; border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+    .eligibility-panel { grid-template-columns: 42px minmax(0, 1fr) 36px; gap: 10px; padding: 16px; }
+    .eligibility-panel > a { width: 36px; height: 36px; }
     .heading-with-action > .button, .heading-actions, .heading-actions .button, .filter-bar .button { width: 100%; }
     .admin-filter .search-field, .search-field, .select-filter { width: 100%; min-width: 0; }
     .total-chip { align-self: flex-start; }

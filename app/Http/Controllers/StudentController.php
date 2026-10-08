@@ -42,9 +42,6 @@ class StudentController extends Controller
         $data = $request->validate([
             'birthplace' => ['required', 'string', 'max:100'],
             'birthdate' => ['required', 'date', 'before:today'],
-            'graduation_year' => ['required', 'integer', 'between:2018,'.(now()->year + 1)],
-            'diploma_number' => ['required', 'string', 'max:100'],
-            'academic_title' => ['required', 'string', 'max:100'],
         ]);
         $request->user()->profile()->update($data);
 
@@ -86,6 +83,12 @@ class StudentController extends Controller
     public function requestSkpi(Request $request)
     {
         $user = $request->user()->load('profile');
+        $identity = $request->validate([
+            'birthplace' => ['required', 'string', 'max:100'],
+            'birthdate' => ['required', 'date', 'before:today'],
+        ]);
+        $user->profile->update($identity);
+        $user->load('profile');
         if (! $user->submissions()->where('status', 'approved')->exists()) {
             return back()->withErrors(['skpi' => 'Unggah sedikitnya satu sertifikat sebelum mengajukan SKPI.']);
         }
@@ -103,13 +106,12 @@ class StudentController extends Controller
         return back()->with('success', 'Pengajuan SKPI berhasil dikirim untuk diperiksa admin.');
     }
 
-    public function downloadSkpi(Request $request, SkpiRequest $skpiRequest, string $format)
+    public function downloadSkpi(Request $request, SkpiRequest $skpiRequest)
     {
         abort_unless($skpiRequest->user_id === $request->user()->id && $skpiRequest->status === 'issued', 403);
-        abort_unless(in_array($format, ['pdf', 'docx'], true), 404);
-        $path = $format === 'pdf' ? $skpiRequest->pdf_path : $skpiRequest->docx_path;
+        $path = $skpiRequest->docx_path;
         abort_unless($path && Storage::disk('local')->exists($path), 404);
 
-        return Storage::disk('local')->download($path, 'SKPI-'.$request->user()->profile->nim.'.'.$format);
+        return Storage::disk('local')->download($path, 'SKPI-'.$request->user()->profile->nim.'.docx');
     }
 }

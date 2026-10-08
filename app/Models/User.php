@@ -63,6 +63,11 @@ class User extends Authenticatable implements MustVerifyEmailContract
         return $this->hasMany(SkpiRequest::class);
     }
 
+    public function registry()
+    {
+        return $this->hasOne(StudentRegistry::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';

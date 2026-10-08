@@ -2,19 +2,138 @@
 @section('title', 'Dashboard Admin')
 @section('context', 'Administrasi SKPI')
 @section('content')
-    <div class="page-heading heading-with-action"><div><p class="section-kicker">Ruang kerja admin</p><h1>Selamat datang, {{ Str::before(auth()->user()->name, ' ') }}.</h1><p>Cek sertifikat yang baru masuk tanpa menahan mahasiswa, lalu proses permintaan SKPI yang siap diterbitkan.</p></div><div class="heading-actions"><a href="{{ route('admin.submissions.index', ['review' => 'new']) }}" class="button button-secondary">Cek sertifikat baru</a><a href="{{ route('admin.skpi.index', ['status' => 'pending']) }}" class="button button-primary">Buka permintaan SKPI</a></div></div>
+    <div class="page-heading heading-with-action">
+        <div>
+            <p class="section-kicker">Ruang kerja admin</p>
+            <h1>Selamat datang, {{ Str::before(auth()->user()->name, ' ') }}.</h1>
+            <p>Cek sertifikat yang baru masuk tanpa menahan mahasiswa, lalu proses permintaan SKPI yang siap diterbitkan.
+            </p>
+        </div>
+        <div class="heading-actions"><a href="{{ route('admin.submissions.index', ['review' => 'new']) }}"
+                class="button button-secondary">Cek sertifikat baru</a><a
+                href="{{ route('admin.skpi.index', ['status' => 'pending']) }}" class="button button-primary">Buka permintaan
+                SKPI</a></div>
+    </div>
     <div class="metrics-row admin-metrics">
-        <article class="metric-card"><span class="metric-icon primary">@include('partials.icon', ['name' => 'certificate'])</span><div><small>Sertifikat baru</small><strong>{{ $newCertificateCount }}</strong><span>belum dicek admin</span></div></article>
-        <article class="metric-card"><span class="metric-icon green">@include('partials.icon', ['name' => 'check'])</span><div><small>Sertifikat dicek</small><strong>{{ $checkedCertificateCount }}</strong><span>tetap langsung aktif</span></div></article>
-        <article class="metric-card"><span class="metric-icon amber">@include('partials.icon', ['name' => 'pending'])</span><div><small>Permintaan SKPI</small><strong>{{ $pendingCount }}</strong><span>menunggu keputusan</span></div></article>
-        <article class="metric-card"><span class="metric-icon neutral">@include('partials.icon', ['name' => 'document'])</span><div><small>SKPI terbit</small><strong>{{ $issuedCount }}</strong><span>Word dan PDF tersedia</span></div></article>
+        <article class="metric-card"><span class="metric-icon primary">@include('partials.icon', ['name' => 'certificate'])</span>
+            <div><small>Sertifikat baru</small><strong>{{ $newCertificateCount }}</strong><span>belum dicek admin</span>
+            </div>
+        </article>
+        <article class="metric-card"><span class="metric-icon green">@include('partials.icon', ['name' => 'check'])</span>
+            <div><small>Sertifikat dicek</small><strong>{{ $checkedCertificateCount }}</strong><span>tetap langsung
+                    aktif</span></div>
+        </article>
+        <article class="metric-card"><span class="metric-icon amber">@include('partials.icon', ['name' => 'pending'])</span>
+            <div><small>Permintaan SKPI</small><strong>{{ $pendingCount }}</strong><span>menunggu keputusan</span></div>
+        </article>
+        <article class="metric-card"><span class="metric-icon neutral">@include('partials.icon', ['name' => 'document'])</span>
+            <div><small>SKPI terbit</small><strong>{{ $issuedCount }}</strong><span>dokumen Word tersedia</span></div>
+        </article>
     </div>
     <div class="dashboard-grid admin-dashboard-grid">
-        <section class="panel panel-table"><div class="panel-head"><div><h2>Sertifikat baru masuk</h2><p>Unggahan terbaru yang belum ditandai sudah dicek</p></div><a href="{{ route('admin.submissions.index', ['review' => 'new']) }}" class="text-link">Kelola semua</a></div>
-            @if($recentCertificates->isEmpty())<div class="empty-state">@include('partials.icon', ['name' => 'check'])<h3>Semua sertifikat sudah dicek</h3><p>Unggahan baru mahasiswa akan muncul di sini dan tetap langsung aktif.</p></div>@else
-            <div class="table-wrap"><table><thead><tr><th>Mahasiswa</th><th>Kegiatan</th><th>Poin</th><th>Masuk</th><th></th></tr></thead><tbody>@foreach($recentCertificates as $item)<tr><td><strong>{{ $item->user->name }}</strong><small>{{ $item->user->profile?->nim }}</small></td><td><strong>{{ $item->activity_name }}</strong><small>{{ $item->rule->category }}</small></td><td>{{ $item->approved_points ?? $item->estimated_points }}</td><td>{{ $item->submitted_at?->diffForHumans() }}</td><td><a href="{{ route('admin.submissions.show', $item) }}" class="table-action" aria-label="Cek sertifikat {{ $item->activity_name }}">@include('partials.icon', ['name' => 'chevron'])</a></td></tr>@endforeach</tbody></table></div>@endif
+        <section class="panel panel-table">
+            <div class="panel-head">
+                <div>
+                    <h2>Sertifikat baru masuk</h2>
+                    <p>Unggahan terbaru yang belum ditandai sudah dicek</p>
+                </div><a href="{{ route('admin.submissions.index', ['review' => 'new']) }}" class="text-link">Kelola
+                    semua</a>
+            </div>
+            @if ($recentCertificates->isEmpty())
+                <div class="empty-state">@include('partials.icon', ['name' => 'check'])<h3>Semua sertifikat sudah dicek</h3>
+                    <p>Unggahan baru mahasiswa akan muncul di sini dan tetap langsung aktif.</p>
+                </div>
+            @else
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mahasiswa</th>
+                                <th>Kegiatan</th>
+                                <th>Poin</th>
+                                <th>Masuk</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($recentCertificates as $item)
+                                <tr>
+                                    <td><strong>{{ $item->user->name }}</strong><small>{{ $item->user->profile?->nim }}</small>
+                                    </td>
+                                    <td><strong>{{ $item->activity_name }}</strong><small>{{ $item->rule->category }}</small>
+                                    </td>
+                                    <td>{{ $item->approved_points ?? $item->estimated_points }}</td>
+                                    <td>{{ $item->submitted_at?->diffForHumans() }}</td>
+                                    <td><a href="{{ route('admin.submissions.show', $item) }}" class="table-action"
+                                            aria-label="Cek sertifikat {{ $item->activity_name }}">@include('partials.icon', ['name' => 'chevron'])</a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
         </section>
-        <aside class="panel category-panel workflow-panel"><div class="panel-head"><div><h2>Alur sertifikat</h2><p>Pemeriksaan tanpa menahan mahasiswa</p></div></div><div class="workflow-note"><span>@include('partials.icon', ['name' => 'upload'])</span><div><strong>1. Mahasiswa mengunggah</strong><p>Sertifikat langsung aktif dan masuk rekap.</p></div></div><div class="workflow-note"><span>@include('partials.icon', ['name' => 'eye'])</span><div><strong>2. Admin mengecek</strong><p>Admin dapat melihat bukti, memperbaiki, atau menghapus data.</p></div></div><div class="workflow-note"><span>@include('partials.icon', ['name' => 'document'])</span><div><strong>3. SKPI tetap dapat diajukan</strong><p>Status cek admin tidak menjadi syarat pengajuan.</p></div></div></aside>
+        <aside class="panel category-panel workflow-panel">
+            <div class="panel-head">
+                <div>
+                    <h2>Alur sertifikat</h2>
+                    <p>Pemeriksaan tanpa menahan mahasiswa</p>
+                </div>
+            </div>
+            <div class="workflow-note"><span>@include('partials.icon', ['name' => 'upload'])</span>
+                <div><strong>1. Mahasiswa mengunggah</strong>
+                    <p>Sertifikat langsung aktif dan masuk rekap.</p>
+                </div>
+            </div>
+            <div class="workflow-note"><span>@include('partials.icon', ['name' => 'eye'])</span>
+                <div><strong>2. Admin mengecek</strong>
+                    <p>Admin dapat melihat bukti, memperbaiki, atau menghapus data.</p>
+                </div>
+            </div>
+            <div class="workflow-note"><span>@include('partials.icon', ['name' => 'document'])</span>
+                <div><strong>3. SKPI tetap dapat diajukan</strong>
+                    <p>Status cek admin tidak menjadi syarat pengajuan.</p>
+                </div>
+            </div>
+        </aside>
     </div>
-    <section class="panel panel-table dashboard-secondary"><div class="panel-head"><div><h2>Permintaan SKPI menunggu</h2><p>Urut dari permintaan yang paling lama menunggu</p></div><a href="{{ route('admin.skpi.index', ['status' => 'pending']) }}" class="text-link">Kelola permintaan</a></div>@if($recentRequests->isEmpty())<div class="empty-state compact">@include('partials.icon', ['name' => 'check'])<h3>Tidak ada permintaan menunggu</h3><p>Permintaan baru akan tampil di sini.</p></div>@else<div class="table-wrap"><table><thead><tr><th>Mahasiswa</th><th>Program studi</th><th>Diajukan</th><th></th></tr></thead><tbody>@foreach($recentRequests as $item)<tr><td><strong>{{ $item->user->name }}</strong><small>{{ $item->user->profile?->nim }}</small></td><td>{{ $item->user->profile?->studyProgram?->name }}</td><td>{{ $item->created_at->translatedFormat('d M Y, H:i') }}</td><td><a href="{{ route('admin.skpi.show', $item) }}" class="table-action" aria-label="Periksa SKPI {{ $item->user->name }}">@include('partials.icon', ['name' => 'chevron'])</a></td></tr>@endforeach</tbody></table></div>@endif</section>
+    <section class="panel panel-table dashboard-secondary">
+        <div class="panel-head">
+            <div>
+                <h2>Permintaan SKPI menunggu</h2>
+                <p>Urut dari permintaan yang paling lama menunggu</p>
+            </div><a href="{{ route('admin.skpi.index', ['status' => 'pending']) }}" class="text-link">Kelola
+                permintaan</a>
+        </div>
+        @if ($recentRequests->isEmpty())
+            <div class="empty-state compact">@include('partials.icon', ['name' => 'check'])<h3>Tidak ada permintaan menunggu</h3>
+                <p>Permintaan baru akan tampil di sini.</p>
+        </div>@else<div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mahasiswa</th>
+                            <th>Program studi</th>
+                            <th>Diajukan</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($recentRequests as $item)
+                            <tr>
+                                <td><strong>{{ $item->user->name }}</strong><small>{{ $item->user->profile?->nim }}</small>
+                                </td>
+                                <td>{{ $item->user->profile?->studyProgram?->name }}</td>
+                                <td>{{ $item->created_at->translatedFormat('d M Y, H:i') }}</td>
+                                <td><a href="{{ route('admin.skpi.show', $item) }}" class="table-action"
+                                        aria-label="Periksa SKPI {{ $item->user->name }}">@include('partials.icon', ['name' => 'chevron'])</a>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </section>
 @endsection

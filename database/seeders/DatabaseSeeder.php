@@ -41,7 +41,16 @@ class DatabaseSeeder extends Seeder
                 ],
             ] : [];
 
-            $model = StudyProgram::create($program + ['learning_outcomes' => $outcomes]);
+            $metadata = match ($program['code']) {
+                'TI' => ['national_code' => '57403', 'academic_title' => 'A.Md.Kom.'],
+                'TM' => ['national_code' => '21401', 'academic_title' => 'A.Md.T.'],
+                'AP' => ['national_code' => '61401', 'academic_title' => 'A.Md.A.B.'],
+                'AK' => ['national_code' => '62401', 'academic_title' => 'A.Md.Ak.'],
+            };
+            $model = StudyProgram::updateOrCreate(
+                ['code' => $program['code']],
+                $program + $metadata + ['learning_outcomes' => $outcomes],
+            );
 
             return [$program['code'] => $model];
         });
@@ -114,48 +123,65 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($rules as $rule) {
-            ActivityRule::create($rule + ['is_mandatory' => $rule['is_mandatory'] ?? false, 'is_active' => true]);
+            $values = $rule + ['is_mandatory' => $rule['is_mandatory'] ?? false, 'is_active' => true];
+            ActivityRule::updateOrCreate([
+                'category' => $values['category'],
+                'subcategory' => $values['subcategory'],
+                'activity_type' => $values['activity_type'],
+                'level' => $values['level'] ?? null,
+                'achievement' => $values['achievement'] ?? null,
+                'duration_label' => $values['duration_label'] ?? null,
+            ], $values);
         }
 
-        User::create([
+        $this->call(StudentRegistrySeeder::class);
+
+        User::where('email', 'mahasiswa@demo.polteksi.ac.id')->delete();
+        User::updateOrCreate(['email' => 'admin@polteksi.ac.id'], [
             'name' => 'Admin SKPI', 'email' => 'admin@polteksi.ac.id', 'role' => 'admin',
-            'email_verified_at' => now(), 'password' => Hash::make('polteksi123'),
-        ]);
-        $student = User::create([
-            'name' => 'Mahasiswa Demo', 'email' => 'mahasiswa@demo.polteksi.ac.id', 'role' => 'student',
-            'email_verified_at' => now(), 'password' => Hash::make('demo12345'),
-        ]);
-        StudentProfile::create([
-            'user_id' => $student->id, 'study_program_id' => $programs['TI']->id,
-            'nim' => 'DEMO-2023-001', 'cohort' => 2023, 'birthplace' => 'Gresik', 'birthdate' => '2004-04-18',
-            'graduation_year' => 2026, 'diploma_number' => 'DEMO-IJAZAH-001', 'academic_title' => 'A.Md.Kom.',
+            'email_verified_at' => now(), 'password' => Hash::make('pastikerja123'),
         ]);
 
-        $seedActivities = [
-            ['Prestasi lomba akademik', 'Nasional', 'Juara 1', 'Juara 1 Lomba Inovasi Teknologi', 'Forum Pendidikan Nasional', '2024-05-20'],
-            [null, null, null, 'Sertifikasi Kompetensi Disnaker', 'Dinas Tenaga Kerja', '2024-08-12', 'Sertifikasi/pelatihan Disnaker'],
-            [null, null, null, 'Ketua Himpunan Mahasiswa', 'HIMA Teknologi Informasi', '2025-01-10', 'Ketua HIMA'],
-            [null, null, null, 'Proyek Digitalisasi Arsip Kampus', 'Politeknik Semen Indonesia', '2025-02-01', 'Keterlibatan lebih dari 3 bulan'],
-            [null, null, null, 'Magang dan Studi Independen Bersertifikat', 'Mitra MSIB', '2025-07-01', 'Magang/PKL 3-6 bulan (MSIB/Magenta)'],
-        ];
-        foreach ($seedActivities as $index => $item) {
-            $rule = isset($item[6])
-                ? ActivityRule::where('activity_type', $item[6])->firstOrFail()
-                : ActivityRule::where('subcategory', $item[0])->where('level', $item[1])->where('achievement', $item[2])->firstOrFail();
-            Submission::create([
-                'user_id' => $student->id, 'activity_rule_id' => $rule->id, 'activity_name' => $item[3],
-                'organizer' => $item[4], 'started_at' => $item[5], 'status' => 'approved',
-                'estimated_points' => $rule->points, 'approved_points' => $rule->points,
-                'submitted_at' => now()->subDays(20 - $index), 'verified_at' => now()->subDays(15 - $index),
+        $demoNames = ['Alfa', 'Bima', 'Citra', 'Damar', 'Elin', 'Faris', 'Gina', 'Hadi', 'Intan'];
+        $demoPrograms = ['TI', 'TM', 'AP', 'AK'];
+        $demoRule = ActivityRule::where('activity_type', 'Seminar online/webinar sehari')->firstOrFail();
+
+        foreach ($demoNames as $index => $shortName) {
+            $number = $index + 1;
+            $program = $programs[$demoPrograms[$index % count($demoPrograms)]];
+            $student = User::updateOrCreate(
+                ['email' => sprintf('demo%02d@demo.polteksi.ac.id', $number)],
+                [
+                    'name' => 'Mahasiswa Uji '.$shortName,
+                    'role' => 'student',
+                    'email_verified_at' => now(),
+                    'password' => Hash::make('demo12345'),
+                ],
+            );
+            StudentProfile::updateOrCreate(['user_id' => $student->id], [
+                'study_program_id' => $program->id,
+                'nim' => sprintf('DUMMY-2023-%03d', $number),
+                'cohort' => 2023,
+                'birthplace' => 'Kota Uji',
+                'birthdate' => sprintf('2004-%02d-01', $number),
+                'graduation_year' => 2026,
+                'diploma_number' => sprintf('DUMMY-IJAZAH-%03d', $number),
+                'academic_title' => $program->academic_title,
             ]);
+            Submission::updateOrCreate(
+                ['user_id' => $student->id, 'certificate_number' => sprintf('DUMMY-CERT-%03d', $number)],
+                [
+                    'activity_rule_id' => $demoRule->id,
+                    'activity_name' => 'Sertifikat Simulasi '.$number,
+                    'organizer' => 'Penyelenggara Data Uji',
+                    'started_at' => '2025-01-'.str_pad((string) $number, 2, '0', STR_PAD_LEFT),
+                    'status' => 'approved',
+                    'estimated_points' => $demoRule->points,
+                    'approved_points' => $demoRule->points,
+                    'submitted_at' => now(),
+                    'verified_at' => now(),
+                ],
+            );
         }
-
-        $pendingRule = ActivityRule::where('activity_type', 'Seminar nasional sehari')->firstOrFail();
-        Submission::create([
-            'user_id' => $student->id, 'activity_rule_id' => $pendingRule->id,
-            'activity_name' => 'Seminar Nasional Transformasi Industri', 'organizer' => 'Forum Teknologi Terapan',
-            'started_at' => now()->subDays(3), 'status' => 'approved', 'estimated_points' => $pendingRule->points,
-            'approved_points' => $pendingRule->points, 'submitted_at' => now()->subDays(2), 'verified_at' => now()->subDays(2),
-        ]);
     }
 }

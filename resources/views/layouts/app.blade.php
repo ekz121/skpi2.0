@@ -55,7 +55,7 @@
             <header class="topbar">
                 <div class="topbar-left">
                     <button class="menu-button" type="button" data-sidebar-open aria-label="Buka menu">@include('partials.icon', ['name' => 'menu'])<span>Menu</span></button>
-                    <div><span class="topbar-date">{{ now()->translatedFormat('l, d F Y') }}</span><strong class="topbar-context">@yield('context', auth()->user()->isAdmin() ? 'Administrasi SKPI' : 'Portal Mahasiswa')</strong></div>
+                    <div><span class="topbar-date" data-live-clock data-timezone="Asia/Jakarta" data-server-time="{{ now()->toIso8601String() }}">{{ now()->translatedFormat('l, d F Y, H:i:s') }} WIB</span><strong class="topbar-context">@yield('context', auth()->user()->isAdmin() ? 'Administrasi SKPI' : 'Portal Mahasiswa')</strong></div>
                 </div>
                 <div class="topbar-actions">
                     <button class="icon-button" type="button" data-theme-toggle aria-label="Ubah tema">@include('partials.icon', ['name' => 'moon'])</button>

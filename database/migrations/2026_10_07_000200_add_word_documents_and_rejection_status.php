@@ -11,6 +11,10 @@ return new class extends Migration
     {
         if (DB::getDriverName() === 'mysql') {
             DB::statement("ALTER TABLE skpi_requests MODIFY status ENUM('pending','revision','issued','failed','rejected') NOT NULL DEFAULT 'pending'");
+        } elseif (DB::getDriverName() === 'sqlite') {
+            Schema::table('skpi_requests', function (Blueprint $table) {
+                $table->string('status')->default('pending')->change();
+            });
         }
 
         Schema::table('skpi_requests', function (Blueprint $table) {

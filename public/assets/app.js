@@ -1,5 +1,58 @@
 const root = document.documentElement;
 
+document.querySelectorAll('[data-live-clock]').forEach((clock) => {
+    const timezone = clock.dataset.timezone || 'Asia/Jakarta';
+    const serverTime = Date.parse(clock.dataset.serverTime || '');
+    const offset = Number.isNaN(serverTime) ? 0 : serverTime - Date.now();
+    const formatter = new Intl.DateTimeFormat('id-ID', {
+        timeZone: timezone,
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+    });
+    const updateClock = () => {
+        clock.textContent = `${formatter.format(new Date(Date.now() + offset))} WIB`;
+    };
+    updateClock();
+    window.setInterval(updateClock, 1000);
+});
+
+const registration = document.querySelector('[data-registration-form]');
+if (registration) {
+    const select = registration.querySelector('[data-student-registry]');
+    const syncRegistry = () => {
+        const option = select?.selectedOptions[0];
+        const values = {
+            nim: option?.dataset.nim || 'Belum dipilih',
+            program: option?.dataset.program || 'Belum dipilih',
+            cohort: option?.dataset.cohort || '2023',
+        };
+        Object.entries(values).forEach(([key, value]) => {
+            const target = registration.querySelector(`[data-registry-${key}]`);
+            if (target) target.textContent = value;
+        });
+    };
+    select?.addEventListener('change', syncRegistry);
+    syncRegistry();
+}
+
+document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+    const input = button.closest('.password-field')?.querySelector('[data-password-input]');
+    button.addEventListener('click', () => {
+        if (!input) return;
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        button.textContent = visible ? 'Lihat' : 'Sembunyikan';
+        button.setAttribute('aria-label', visible ? 'Tampilkan password' : 'Sembunyikan password');
+        input.focus();
+    });
+});
+
 document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
     button.addEventListener('click', () => {
         const next = root.dataset.theme === 'dark' ? 'light' : 'dark';

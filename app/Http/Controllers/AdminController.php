@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AppNotification;
 use App\Models\ActivityRule;
+use App\Models\AppNotification;
 use App\Models\SkpiRequest;
 use App\Models\Submission;
 use App\Models\User;
 use App\Notifications\SkpiStatusNotification;
 use App\Services\SkpiDocumentService;
+use App\Services\SkpiRequestInvalidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -89,9 +90,9 @@ class AdminController extends Controller
         ]);
     }
 
-    public function updateSubmission(Request $request, Submission $submission)
+    public function updateSubmission(Request $request, Submission $submission, SkpiRequestInvalidator $invalidator)
     {
-        return $this->persistSubmission($request, $submission);
+        return $this->persistSubmission($request, $submission, $invalidator);
     }
 
     public function checkSubmission(Request $request, Submission $submission)
@@ -104,25 +105,27 @@ class AdminController extends Controller
         return back()->with('success', 'Sertifikat ditandai sudah diperiksa. Status mahasiswa tetap langsung aktif.');
     }
 
-    public function destroySubmission(Submission $submission)
+    public function destroySubmission(Submission $submission, SkpiRequestInvalidator $invalidator)
     {
+        $student = $submission->user;
         $userId = $submission->user_id;
         $evidencePath = $submission->evidence_path;
         $submission->delete();
         if ($evidencePath) {
             Storage::disk('local')->delete($evidencePath);
         }
+        $invalidator->invalidateFor($student);
         AppNotification::create([
             'user_id' => $userId,
             'title' => 'Data sertifikat dihapus admin',
-            'message' => 'Satu data sertifikat dihapus dari rekap. Hubungi admin jika Anda memerlukan penjelasan.',
+            'message' => 'Satu data sertifikat dihapus dari rekap. Anda dapat mengunggah ulang sertifikat dan mengajukan SKPI kembali.',
             'url' => route('student.submissions.index'),
         ]);
 
         return redirect()->route('admin.submissions.index')->with('success', 'Data sertifikat dan berkas buktinya berhasil dihapus.');
     }
 
-    private function persistSubmission(Request $request, Submission $submission)
+    private function persistSubmission(Request $request, Submission $submission, ?SkpiRequestInvalidator $invalidator = null)
     {
         $data = $request->validate([
             'user_id' => ['required', Rule::exists('users', 'id')->where('role', 'student')],
@@ -169,6 +172,9 @@ class AdminController extends Controller
         if ($request->hasFile('evidence') && $oldEvidence && $oldEvidence !== $submission->evidence_path) {
             Storage::disk('local')->delete($oldEvidence);
         }
+        if ($wasExisting && $invalidator) {
+            $invalidator->invalidateFor($submission->user);
+        }
 
         AppNotification::create([
             'user_id' => $submission->user_id,
@@ -198,6 +204,16 @@ class AdminController extends Controller
         $query = SkpiRequest::with('user.profile.studyProgram')->latest();
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
+        }
+        if ($request->filled('q')) {
+            $term = '%'.(string) $request->string('q').'%';
+            $query->whereHas('user', function ($user) use ($term) {
+                $user->where('name', 'like', $term)
+                    ->orWhere('email', 'like', $term)
+                    ->orWhereHas('profile', fn ($profile) => $profile
+                        ->where('nim', 'like', $term)
+                        ->orWhere('diploma_number', 'like', $term));
+            });
         }
 
         return view('admin.skpi.index', ['requests' => $query->paginate(100)->withQueryString()]);
@@ -235,10 +251,10 @@ class AdminController extends Controller
             Log::error('SKPI generation failed', ['request_id' => $skpiRequest->id, 'error' => $exception->getMessage()]);
             $skpiRequest->update(['status' => 'failed', 'admin_note' => null]);
 
-            return back()->withErrors(['document' => 'Dokumen Word atau PDF gagal dibuat. Silakan ulangi penerbitan.']);
+            return back()->withErrors(['document' => 'Dokumen Word gagal dibuat. Silakan ulangi penerbitan.']);
         }
 
-        return redirect()->route('admin.skpi.index')->with('success', 'SKPI Word dan PDF berhasil diterbitkan.');
+        return redirect()->route('admin.skpi.index')->with('success', 'SKPI Word berhasil diterbitkan.');
     }
 
     public function bulkSkpi(Request $request, SkpiDocumentService $documents)
@@ -281,14 +297,14 @@ class AdminController extends Controller
         return back()->with('success', $message);
     }
 
-    public function downloadSkpi(SkpiRequest $skpiRequest, string $format)
+    public function downloadSkpi(SkpiRequest $skpiRequest)
     {
-        abort_unless($skpiRequest->status === 'issued' && in_array($format, ['pdf', 'docx'], true), 404);
-        $path = $format === 'pdf' ? $skpiRequest->pdf_path : $skpiRequest->docx_path;
+        abort_unless($skpiRequest->status === 'issued', 404);
+        $path = $skpiRequest->docx_path;
         abort_unless($path && Storage::disk('local')->exists($path), 404);
         $nim = $skpiRequest->user->profile?->nim ?: $skpiRequest->id;
 
-        return Storage::disk('local')->download($path, 'SKPI-'.$nim.'.'.$format);
+        return Storage::disk('local')->download($path, 'SKPI-'.$nim.'.docx');
     }
 
     private function issueSkpi(SkpiRequest $skpiRequest, User $admin, SkpiDocumentService $documents): void
@@ -299,8 +315,6 @@ class AdminController extends Controller
             $errors['skpi'] = 'Mahasiswa belum memiliki sertifikat yang tersimpan.';
         } elseif (! $user->profile?->isComplete()) {
             $errors['skpi'] = 'Biodata dokumen mahasiswa belum lengkap.';
-        } elseif (empty($user->profile->studyProgram->learning_outcomes)) {
-            $errors['skpi'] = 'Capaian pembelajaran resmi program studi belum dikonfigurasi.';
         } elseif (! config('skpi.signatory_name') || ! config('skpi.signatory_nidn')) {
             $errors['skpi'] = 'Nama atau NIDN pejabat pengesah belum dikonfigurasi.';
         }
@@ -316,20 +330,19 @@ class AdminController extends Controller
                 'admin_note' => null,
                 'document_number' => $files['number'],
                 'snapshot' => $files['snapshot'],
-                'pdf_path' => $files['pdfPath'],
                 'docx_path' => $files['docxPath'],
                 'issued_at' => now(),
             ]);
             AppNotification::create([
                 'user_id' => $user->id,
                 'title' => 'SKPI telah diterbitkan',
-                'message' => 'Dokumen Word dan PDF tersedia dan dapat diunduh dari akun Anda.',
+                'message' => 'Dokumen Word tersedia dan dapat diunduh dari akun Anda.',
                 'url' => route('student.skpi'),
             ]);
         });
         try {
             $skpiRequest->refresh();
-            $user->notify(new SkpiStatusNotification($skpiRequest, 'Dokumen Word dan PDF telah tersedia di akun Anda.'));
+            $user->notify(new SkpiStatusNotification($skpiRequest, 'Dokumen Word telah tersedia di akun Anda.'));
         } catch (\Throwable $exception) {
             Log::warning('SKPI issued email could not be sent', ['request_id' => $skpiRequest->id, 'error' => $exception->getMessage()]);
         }
@@ -372,10 +385,9 @@ class AdminController extends Controller
         }
         foreach ($issued as $item) {
             $nim = $item->user->profile?->nim ?: $item->id;
-            foreach (['pdf' => $item->pdf_path, 'docx' => $item->docx_path] as $extension => $path) {
-                if ($path && Storage::disk('local')->exists($path)) {
-                    $archive->addFromString('SKPI-'.$nim.'-'.$item->id.'.'.$extension, Storage::disk('local')->get($path));
-                }
+            $path = $item->docx_path;
+            if ($path && Storage::disk('local')->exists($path)) {
+                $archive->addFromString('SKPI-'.$nim.'-'.$item->id.'.docx', Storage::disk('local')->get($path));
             }
         }
         $archive->close();

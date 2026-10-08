@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityRule;
 use App\Models\Submission;
+use App\Services\SkpiRequestInvalidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -43,7 +44,6 @@ class SubmissionController extends Controller
     public function edit(Request $request, Submission $submission)
     {
         $this->authorizeOwner($request, $submission);
-        abort_unless(in_array($submission->status, ['draft', 'revision'], true), 403);
 
         return view('student.submissions.form', [
             'submission' => $submission,
@@ -51,12 +51,25 @@ class SubmissionController extends Controller
         ]);
     }
 
-    public function update(Request $request, Submission $submission)
+    public function update(Request $request, Submission $submission, SkpiRequestInvalidator $invalidator)
     {
         $this->authorizeOwner($request, $submission);
-        abort_unless(in_array($submission->status, ['draft', 'revision'], true), 403);
 
-        return $this->persist($request, $submission);
+        return $this->persist($request, $submission, $invalidator);
+    }
+
+    public function destroy(Request $request, Submission $submission, SkpiRequestInvalidator $invalidator)
+    {
+        $this->authorizeOwner($request, $submission);
+        $evidencePath = $submission->evidence_path;
+        $submission->delete();
+        if ($evidencePath) {
+            Storage::disk('local')->delete($evidencePath);
+        }
+        $invalidator->invalidateFor($request->user());
+
+        return redirect()->route('student.submissions.index')
+            ->with('success', 'Sertifikat berhasil dihapus. Anda dapat mengunggah sertifikat pengganti dan mengajukan SKPI kembali.');
     }
 
     public function downloadEvidence(Request $request, Submission $submission)
@@ -67,7 +80,7 @@ class SubmissionController extends Controller
         return Storage::disk('local')->download($submission->evidence_path, $submission->evidence_original_name);
     }
 
-    private function persist(Request $request, Submission $submission)
+    private function persist(Request $request, Submission $submission, ?SkpiRequestInvalidator $invalidator = null)
     {
         $isSubmit = true;
         $data = $request->validate([
@@ -100,15 +113,25 @@ class SubmissionController extends Controller
         $data['verified_at'] = now();
         $data['verified_by'] = null;
         $data['admin_note'] = null;
+        $data['admin_checked_by'] = null;
+        $data['admin_checked_at'] = null;
 
         if ($request->hasFile('evidence')) {
             $data['evidence_path'] = $request->file('evidence')->store('evidence/'.$request->user()->id);
             $data['evidence_original_name'] = $request->file('evidence')->getClientOriginalName();
         }
 
+        $wasExisting = $submission->exists;
+        $oldEvidence = $submission->evidence_path;
         $submission->fill($data);
         $submission->user_id = $request->user()->id;
         $submission->save();
+        if ($request->hasFile('evidence') && $oldEvidence && $oldEvidence !== $submission->evidence_path) {
+            Storage::disk('local')->delete($oldEvidence);
+        }
+        if ($wasExisting && $invalidator) {
+            $invalidator->invalidateFor($request->user());
+        }
 
         return redirect()->route('student.submissions.show', $submission)
             ->with('success', 'Sertifikat tersimpan dan langsung masuk ke rekap kegiatan Anda.');

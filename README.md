@@ -1,21 +1,19 @@
 # SKEM dan SKPI Politeknik Semen Indonesia
 
-Aplikasi Laravel untuk pencatatan kegiatan mahasiswa, pengajuan SKPI, serta penerbitan Word dan PDF dari template resmi.
+Aplikasi Laravel untuk registrasi mahasiswa dari data akademik terkontrol, pencatatan sertifikat, pengajuan SKPI, serta penerbitan dokumen Word dari template resmi.
 
 ## Teknologi
 
-- Laravel 12 dan PHP 8.2+
-- MySQL sebagai database utama
+- Laravel 12 dan PHP 8.2 atau lebih baru
+- MySQL
 - Blade, CSS, dan JavaScript tanpa dependensi frontend eksternal
-- Template DOCX resmi dan LibreOffice untuk konversi PDF yang konsisten
-- Dompdf sebagai renderer PDF cadangan
+- Template DOCX resmi untuk hasil SKPI
 
 ## Menjalankan aplikasi
 
 1. Salin `.env.example` menjadi `.env`.
-2. Buat database MySQL bernama `skem_skpi_polteksi`.
-3. Sesuaikan koneksi `DB_*` di `.env`.
-4. Jalankan perintah berikut:
+2. Buat database MySQL dan sesuaikan nilai `DB_*`.
+3. Jalankan:
 
 ```powershell
 composer install
@@ -24,31 +22,44 @@ php artisan migrate --seed
 php artisan serve
 ```
 
-Jika Composer belum tersedia global di mesin ini, gunakan `php .tools/composer.phar install`.
+## Akun
 
-## Akun demonstrasi
+Admin: `admin@polteksi.ac.id` / `pastikerja123`
 
-- Mahasiswa: `mahasiswa@demo.polteksi.ac.id` / `demo12345`
-- Admin: `admin@polteksi.ac.id` / `polteksi123`
+Sembilan akun uji memakai password `demo12345`:
 
-Identitas, kegiatan, dan angka akun demo ditandai sebagai data simulasi di antarmuka.
+| Email | Nama |
+| --- | --- |
+| `demo01@demo.polteksi.ac.id` | Mahasiswa Uji Alfa |
+| `demo02@demo.polteksi.ac.id` | Mahasiswa Uji Bima |
+| `demo03@demo.polteksi.ac.id` | Mahasiswa Uji Citra |
+| `demo04@demo.polteksi.ac.id` | Mahasiswa Uji Damar |
+| `demo05@demo.polteksi.ac.id` | Mahasiswa Uji Elin |
+| `demo06@demo.polteksi.ac.id` | Mahasiswa Uji Faris |
+| `demo07@demo.polteksi.ac.id` | Mahasiswa Uji Gina |
+| `demo08@demo.polteksi.ac.id` | Mahasiswa Uji Hadi |
+| `demo09@demo.polteksi.ac.id` | Mahasiswa Uji Intan |
 
-## Konfigurasi penerbitan resmi
+## Alur utama
 
-Sebelum penggunaan produksi:
+- Registrasi memilih nama dari 77 data sumber. NIM, prodi, angkatan 2023, tahun lulus 2026, nomor ijazah, dan gelar terisi otomatis.
+- Sertifikat langsung aktif setelah diunggah. Mahasiswa dan admin dapat melihat, mengubah, dan menghapus sertifikat.
+- Satu sertifikat cukup untuk mengajukan SKPI. Mahasiswa hanya menambahkan tempat dan tanggal lahir.
+- Admin dapat mencari permintaan, menerbitkan atau menolak satu maupun banyak permintaan, dan mengunduh ZIP berisi Word.
+- Jika sertifikat yang mendasari SKPI diubah atau dihapus, dokumen lama dibatalkan agar mahasiswa dapat mengunggah dan mengajukan ulang.
 
-- set `SKPI_DEMO_MODE=false`;
-- isi `SKPI_SIGNATORY_NAME` dan `SKPI_SIGNATORY_NIDN`;
-- isi `SKPI_OFFICE_BINARY` bila LibreOffice tidak berada di lokasi instalasi standar;
-- lengkapi capaian pembelajaran resmi seluruh program studi;
-- pastikan tahun lulus, nomor ijazah, dan gelar akademik tersedia;
-- konfigurasi email dan penyimpanan privat kampus.
+## Konfigurasi produksi
 
-Sistem menolak penerbitan jika data wajib tersebut belum lengkap. Sertifikat baru langsung aktif tanpa menunggu keputusan admin, dan satu sertifikat sudah cukup untuk mengirim permintaan SKPI. Admin tetap menerima seluruh unggahan pada menu **Sertifikat Masuk**, dapat memfilter data baru atau sudah dicek, membuka bukti, menandai pemeriksaan, serta menambah, mengubah, atau menghapus data sertifikat.
+Isi `SKPI_SIGNATORY_NAME` dan `SKPI_SIGNATORY_NIDN`, koneksi database, SMTP, `APP_URL`, dan `APP_TIMEZONE=Asia/Jakarta` pada `.env`. Berkas sertifikat dan Word disimpan pada disk lokal privat.
+
+Panduan lengkap:
+
+- [Struktur database](docs/STRUKTUR-DATABASE.md)
+- [Hosting di subdomain Hostinger](docs/PANDUAN-HOSTINGER.md)
 
 ## Pengujian
 
-Jalankan `php artisan test`. Pengujian mencakup role, unggahan langsung, pemeriksaan dan CRUD sertifikat admin, isolasi data, keputusan SKPI tunggal dan massal, render halaman, serta penerbitan Word/PDF.
+Jalankan `php artisan test`. Pengujian meliputi registrasi terkontrol, 77 data sumber, role, unggahan otomatis, CRUD sertifikat, pencarian, pengajuan ulang, keputusan massal, Word, dan isolasi data.
 
 <details>
 <summary>Catatan framework Laravel</summary>
