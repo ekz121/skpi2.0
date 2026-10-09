@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
+use ZipArchive;
 
 class SkemWorkflowTest extends TestCase
 {
@@ -43,6 +44,21 @@ class SkemWorkflowTest extends TestCase
         auth()->logout();
         $this->post(route('login.attempt'), ['email' => 'admin@polteksi.ac.id', 'password' => 'pastikerja123'])
             ->assertRedirect(route('admin.dashboard'));
+    }
+
+    public function test_login_attempts_are_rate_limited(): void
+    {
+        foreach (range(1, 6) as $attempt) {
+            $this->post(route('login.attempt'), [
+                'email' => 'rate-limit@example.test',
+                'password' => 'password-salah',
+            ])->assertRedirect();
+        }
+
+        $this->post(route('login.attempt'), [
+            'email' => 'rate-limit@example.test',
+            'password' => 'password-salah',
+        ])->assertTooManyRequests();
     }
 
     public function test_registration_sends_email_verification_notification(): void
@@ -96,6 +112,8 @@ class SkemWorkflowTest extends TestCase
 
         $response->assertOk()
             ->assertSee('name="student_registry_id"', false)
+            ->assertSee('data-student-search', false)
+            ->assertSee('Huruf besar dan kecil menghasilkan pencarian yang sama')
             ->assertSee('name="email"', false)
             ->assertSee('name="password"', false)
             ->assertDontSee('name="nim"', false)
@@ -318,6 +336,19 @@ class SkemWorkflowTest extends TestCase
         $this->assertSame('issued', $skpi->status);
         $this->assertNotNull($skpi->document_number);
         Storage::disk('local')->assertExists($skpi->docx_path);
+        $archive = new ZipArchive;
+        $this->assertTrue($archive->open(Storage::disk('local')->path($skpi->docx_path)) === true);
+        $documentXml = $archive->getFromName('word/document.xml');
+        $archive->close();
+        $this->assertIsString($documentXml);
+        $this->assertStringContainsString($student->name, $documentXml);
+        $this->assertStringContainsString($student->profile->nim, $documentXml);
+        $this->assertStringContainsString($student->profile->diploma_number, $documentXml);
+        $this->assertStringContainsString($student->profile->academic_title, $documentXml);
+        $this->assertStringContainsString('Gresik, '.now()->locale('id')->translatedFormat('d F Y'), $documentXml);
+        $this->assertStringContainsString('Pejabat Penguji', $documentXml);
+        $this->assertStringContainsString('NIDN. 0000000000', $documentXml);
+        $this->assertStringNotContainsString('Gresik, …………………………', $documentXml);
         Notification::assertSentTo($student, SkpiStatusNotification::class);
     }
 

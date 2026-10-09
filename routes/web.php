@@ -17,13 +17,13 @@ Route::get('/', function () {
 
 Route::middleware('guest')->group(function () {
     Route::get('/masuk', [AuthController::class, 'loginForm'])->name('login');
-    Route::post('/masuk', [AuthController::class, 'login'])->name('login.attempt');
+    Route::post('/masuk', [AuthController::class, 'login'])->middleware('throttle:login')->name('login.attempt');
     Route::get('/daftar', [AuthController::class, 'registerForm'])->name('register');
-    Route::post('/daftar', [AuthController::class, 'register'])->name('register.store');
+    Route::post('/daftar', [AuthController::class, 'register'])->middleware('throttle:registration')->name('register.store');
     Route::get('/lupa-password', [AuthController::class, 'forgotForm'])->name('password.request');
-    Route::post('/lupa-password', [AuthController::class, 'forgot'])->name('password.email');
+    Route::post('/lupa-password', [AuthController::class, 'forgot'])->middleware('throttle:password-reset')->name('password.email');
     Route::get('/reset-password/{token}', [AuthController::class, 'resetForm'])->name('password.reset');
-    Route::post('/reset-password', [AuthController::class, 'reset'])->name('password.update');
+    Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:password-reset')->name('password.update');
 });
 
 Route::middleware('auth')->group(function () {

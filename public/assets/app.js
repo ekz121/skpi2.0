@@ -24,21 +24,135 @@ document.querySelectorAll('[data-live-clock]').forEach((clock) => {
 
 const registration = document.querySelector('[data-registration-form]');
 if (registration) {
-    const select = registration.querySelector('[data-student-registry]');
-    const syncRegistry = () => {
-        const option = select?.selectedOptions[0];
+    const search = registration.querySelector('[data-student-search]');
+    const registryId = registration.querySelector('[data-student-registry-id]');
+    const optionList = registration.querySelector('[data-student-options]');
+    const options = [...registration.querySelectorAll('[data-student-option]')];
+    const empty = registration.querySelector('[data-student-empty]');
+    const status = registration.querySelector('[data-student-search-status]');
+    let visibleOptions = [];
+    let activeIndex = -1;
+
+    const normalize = (value) => value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('id')
+        .trim();
+
+    const syncRegistry = (option = null) => {
         const values = {
-            nim: option?.dataset.nim || 'Belum dipilih',
-            program: option?.dataset.program || 'Belum dipilih',
-            cohort: option?.dataset.cohort || '2023',
+            nim: option?.dataset.nim ?? 'Belum dipilih',
+            program: option?.dataset.program ?? 'Belum dipilih',
+            cohort: option?.dataset.cohort ?? '2023',
         };
         Object.entries(values).forEach(([key, value]) => {
             const target = registration.querySelector(`[data-registry-${key}]`);
             if (target) target.textContent = value;
         });
     };
-    select?.addEventListener('change', syncRegistry);
-    syncRegistry();
+
+    const closeOptions = () => {
+        optionList.hidden = true;
+        search.setAttribute('aria-expanded', 'false');
+        search.removeAttribute('aria-activedescendant');
+        activeIndex = -1;
+    };
+
+    const setActiveOption = (index) => {
+        visibleOptions.forEach((option) => option.classList.remove('active'));
+        if (visibleOptions.length === 0) return;
+        activeIndex = (index + visibleOptions.length) % visibleOptions.length;
+        const option = visibleOptions[activeIndex];
+        option.classList.add('active');
+        search.setAttribute('aria-activedescendant', option.id);
+        option.scrollIntoView({ block: 'nearest' });
+    };
+
+    const chooseStudent = (option) => {
+        search.value = option.dataset.name;
+        registryId.value = option.dataset.id;
+        search.setCustomValidity('');
+        options.forEach((item) => item.setAttribute('aria-selected', item === option ? 'true' : 'false'));
+        syncRegistry(option);
+        closeOptions();
+    };
+
+    const matchScore = (option, query) => {
+        const name = normalize(option.dataset.name);
+        const nim = normalize(option.dataset.nim);
+        if (name.startsWith(query)) return 0;
+        if (name.split(/\s+/).some((word) => word.startsWith(query))) return 1;
+        if (name.includes(query) || nim.startsWith(query)) return 2;
+        return Number.POSITIVE_INFINITY;
+    };
+
+    const filterStudents = () => {
+        const query = normalize(search.value);
+        registryId.value = '';
+        options.forEach((option) => {
+            option.hidden = true;
+            option.classList.remove('active');
+            option.setAttribute('aria-selected', 'false');
+        });
+        syncRegistry();
+
+        if (query.length === 0) {
+            status.textContent = 'Ketik nama untuk memulai pencarian.';
+            closeOptions();
+            return;
+        }
+
+        visibleOptions = options
+            .map((option, order) => ({ option, order, score: matchScore(option, query) }))
+            .filter((item) => Number.isFinite(item.score))
+            .sort((left, right) => left.score - right.score || left.order - right.order)
+            .slice(0, 8)
+            .map((item) => item.option);
+
+        visibleOptions.forEach((option) => { option.hidden = false; });
+        empty.hidden = visibleOptions.length !== 0;
+        optionList.hidden = false;
+        search.setAttribute('aria-expanded', 'true');
+        status.textContent = visibleOptions.length === 0
+            ? 'Nama tidak ditemukan.'
+            : `${visibleOptions.length} nama ditemukan.`;
+    };
+
+    options.forEach((option) => {
+        option.addEventListener('pointerdown', (event) => event.preventDefault());
+        option.addEventListener('click', () => chooseStudent(option));
+    });
+    search.addEventListener('input', filterStudents);
+    search.addEventListener('focus', () => {
+        if (!registryId.value && search.value.trim()) filterStudents();
+    });
+    search.addEventListener('blur', () => window.setTimeout(closeOptions, 120));
+    search.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (optionList.hidden) filterStudents();
+            setActiveOption(activeIndex + (event.key === 'ArrowDown' ? 1 : -1));
+        } else if (event.key === 'Enter' && activeIndex >= 0) {
+            event.preventDefault();
+            chooseStudent(visibleOptions[activeIndex]);
+        } else if (event.key === 'Escape') {
+            closeOptions();
+        }
+    });
+    registration.addEventListener('submit', (event) => {
+        if (registryId.value) return;
+        const exact = options.find((option) => normalize(option.dataset.name) === normalize(search.value));
+        if (exact) {
+            chooseStudent(exact);
+            return;
+        }
+        event.preventDefault();
+        search.setCustomValidity('Pilih nama dari hasil pencarian.');
+        search.reportValidity();
+    });
+
+    const selected = options.find((option) => option.dataset.id === registryId.value);
+    if (selected) chooseStudent(selected);
 }
 
 document.querySelectorAll('[data-password-toggle]').forEach((button) => {

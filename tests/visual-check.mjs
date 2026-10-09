@@ -65,16 +65,26 @@ let pageNavigation = waitFor('Page.loadEventFired');
 await send('Page.navigate', { url: 'http://127.0.0.1:8000/daftar' });
 await pageNavigation;
 const registrationDesktop = await evaluate(`(() => {
-    const select = document.querySelector('[data-student-registry]');
-    const option = [...select.options].find((item) => item.value);
-    select.value = option.value;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const search = document.querySelector('[data-student-search]');
+    const options = [...document.querySelectorAll('[data-student-option]')];
+    const searchFor = (query) => {
+        search.value = query;
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        return options.filter((option) => !option.hidden).map((option) => option.dataset.name);
+    };
+    const lowerResults = searchFor('damar');
+    const upperResults = searchFor('DAMAR');
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     const password = document.querySelector('[data-password-input]');
     const toggle = document.querySelector('[data-password-toggle]');
     toggle.click();
     const logo = document.querySelector('.brand-logo-card img');
     return {
-        choices: select.options.length - 1,
+        choices: options.length,
+        suggestions: lowerResults.length,
+        caseInsensitive: JSON.stringify(lowerResults) === JSON.stringify(upperResults),
+        selectedId: document.querySelector('[data-student-registry-id]').value,
         nim: document.querySelector('[data-registry-nim]').textContent.trim(),
         program: document.querySelector('[data-registry-program]').textContent.trim(),
         cohort: document.querySelector('[data-registry-cohort]').textContent.trim(),
@@ -90,8 +100,33 @@ await screenshot('storage/app/visual-registration-desktop.png');
 await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
 await send('Page.reload', { ignoreCache: true });
 await waitFor('Page.loadEventFired');
-const registrationMobile = await evaluate(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth, fields: document.querySelectorAll('form input, form select').length })`);
+const registrationMobile = await evaluate(`(() => {
+    const search = document.querySelector('[data-student-search]');
+    search.value = 'muhammad';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    const list = document.querySelector('[data-student-options]');
+    const firstSuggestion = document.querySelector('[data-student-option]:not([hidden])');
+    const suggestionCount = document.querySelectorAll('[data-student-option]:not([hidden])').length;
+    const listWithinViewport = list.getBoundingClientRect().right <= innerWidth && list.getBoundingClientRect().left >= 0;
+    firstSuggestion.click();
+    return {
+        width: innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        fields: document.querySelectorAll('form input, form select').length,
+        suggestions: suggestionCount,
+        listWithinViewport,
+        touchSelectionStored: Boolean(document.querySelector('[data-student-registry-id]').value),
+    };
+})()`);
 await screenshot('storage/app/visual-registration-mobile.png');
+
+const registrationWidths = [];
+for (const width of [320, 768]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 600 });
+    await send('Page.reload', { ignoreCache: true });
+    await waitFor('Page.loadEventFired');
+    registrationWidths.push(await evaluate(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth })`));
+}
 
 await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 900, deviceScaleFactor: 1, mobile: false });
 pageNavigation = waitFor('Page.loadEventFired');
@@ -229,5 +264,5 @@ if (firstRequestUrl) {
     await screenshot('storage/app/visual-skpi-admin-detail.png');
 }
 
-console.log(JSON.stringify({ loginControls, registrationDesktop, registrationMobile, desktop, mobile, menuInteraction, wizardInteraction, guideInteraction, skpiRequestForm, admin, darkTheme, adminSearch, bulkInteraction, adminDecision, issues: issues.length }, null, 2));
+console.log(JSON.stringify({ loginControls, registrationDesktop, registrationMobile, registrationWidths, desktop, mobile, menuInteraction, wizardInteraction, guideInteraction, skpiRequestForm, admin, darkTheme, adminSearch, bulkInteraction, adminDecision, issues: issues.length }, null, 2));
 socket.close();
