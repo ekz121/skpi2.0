@@ -67,9 +67,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->grou
     Route::put('/sertifikat/{submission}/cek', [AdminController::class, 'checkSubmission'])->name('submissions.check');
     Route::delete('/sertifikat/{submission}', [AdminController::class, 'destroySubmission'])->name('submissions.destroy');
     Route::get('/mahasiswa', [AdminController::class, 'students'])->name('students');
+    Route::get('/mahasiswa/baru', [AdminController::class, 'createStudent'])->name('students.create');
+    Route::post('/mahasiswa', [AdminController::class, 'storeStudent'])->name('students.store');
+    Route::get('/mahasiswa/{student}', [AdminController::class, 'showStudent'])->name('students.show');
+    Route::get('/mahasiswa/{student}/ubah', [AdminController::class, 'editStudent'])->name('students.edit');
+    Route::put('/mahasiswa/{student}', [AdminController::class, 'updateStudent'])->name('students.update');
+    Route::delete('/mahasiswa/{student}', [AdminController::class, 'destroyStudent'])->name('students.destroy');
     Route::get('/skpi', [AdminController::class, 'skpiRequests'])->name('skpi.index');
     Route::post('/skpi/aksi-massal', [AdminController::class, 'bulkSkpi'])->name('skpi.bulk');
     Route::get('/skpi/{skpiRequest}/unduh', [AdminController::class, 'downloadSkpi'])->name('skpi.download');
     Route::get('/skpi/{skpiRequest}', [AdminController::class, 'showSkpi'])->name('skpi.show');
     Route::put('/skpi/{skpiRequest}', [AdminController::class, 'updateSkpi'])->name('skpi.update');
+    Route::put('/skpi/{skpiRequest}/tarik', [AdminController::class, 'withdrawSkpi'])->name('skpi.withdraw');
 });

@@ -9,9 +9,9 @@
         </section>
         <section class="panel">
             <div class="panel-head"><div><h2>Data kelahiran</h2><p>Mahasiswa hanya perlu melengkapi tempat dan tanggal lahir.</p></div></div>
-            <form method="POST" action="{{ route('student.profile.update') }}" class="form-stack">@csrf @method('PUT')
-                <label class="field"><span>Tempat lahir</span><input type="text" name="birthplace" value="{{ old('birthplace', $profile->birthplace) }}" required></label>
-                <label class="field"><span>Tanggal lahir</span><input type="date" name="birthdate" value="{{ old('birthdate', $profile->birthdate?->format('Y-m-d')) }}" required></label>
+            <form method="POST" action="{{ route('student.profile.update') }}" class="form-stack" novalidate data-validate-form>@csrf @method('PUT')
+                <label class="field"><span>Tempat lahir <b class="required-mark" aria-hidden="true">*</b></span><input type="text" name="birthplace" value="{{ old('birthplace', $profile->birthplace) }}" required @class(['is-invalid' => $errors->has('birthplace')])><x-field-error name="birthplace" client /></label>
+                <label class="field"><span>Tanggal lahir <b class="required-mark" aria-hidden="true">*</b></span><input type="date" name="birthdate" value="{{ old('birthdate', $profile->birthdate?->format('Y-m-d')) }}" max="{{ now()->subDay()->format('Y-m-d') }}" required @class(['is-invalid' => $errors->has('birthdate')])><x-field-error name="birthdate" client /></label>
                 <div class="read-only-note"><strong>Data akademik terkunci</strong><p>Tahun lulus 2026, nomor ijazah, dan gelar diambil otomatis dari daftar akademik.</p></div>
                 <button class="button button-primary" type="submit">Simpan perubahan</button>
             </form>

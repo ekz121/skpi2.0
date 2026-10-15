@@ -1,4 +1,5 @@
 import { writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 const endpoint = 'http://127.0.0.1:9222';
 const adminPassword = process.env.VISUAL_ADMIN_PASSWORD;
@@ -165,7 +166,7 @@ await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, de
 pageNavigation = waitFor('Page.loadEventFired');
 await send('Page.navigate', { url: 'http://127.0.0.1:8000/mahasiswa/pengajuan/baru' });
 await pageNavigation;
-const wizardInteraction = await evaluate(`(() => {
+await evaluate(`(() => {
     const form = document.querySelector('[data-upload-wizard]');
     const next = form.querySelector('[data-step-next]');
     form.querySelector('[name="category_picker"]').click();
@@ -178,11 +179,20 @@ const wizardInteraction = await evaluate(`(() => {
     form.querySelector('[name="activity_name"]').value = 'Pemeriksaan browser';
     form.querySelector('[name="organizer"]').value = 'Pengujian lokal';
     form.querySelector('[name="started_at"]').value = '2026-09-01';
+    form.querySelector('[name="ended_at"]').value = '2026-09-01';
+})()`);
+const wizardDocument = await send('DOM.getDocument');
+const wizardFile = await send('DOM.querySelector', { nodeId: wizardDocument.root.nodeId, selector: '[data-file-input]' });
+await send('DOM.setFileInputFiles', { files: [resolve('tests/fixtures/evidence.pdf')], nodeId: wizardFile.nodeId });
+const wizardInteraction = await evaluate(`(() => {
+    const form = document.querySelector('[data-upload-wizard]');
+    const next = form.querySelector('[data-step-next]');
+    form.querySelector('[data-file-input]').dispatchEvent(new Event('change', { bubbles: true }));
     next.click();
     const summaryVisible = form.querySelector('[data-step="4"]').classList.contains('active');
     const points = form.querySelector('[data-summary-output="points"]').textContent.trim();
     form.querySelector('[data-step-back]').click();
-    return { summaryVisible, points, backWorked: form.querySelector('[data-step="3"]').classList.contains('active') };
+    return { summaryVisible, points, backWorked: form.querySelector('[data-step="3"]').classList.contains('active'), retainedActivity: form.querySelector('[name="activity_name"]').value, fileAccepted: form.querySelector('[data-file-input]').validationMessage === '' };
 })()`);
 
 pageNavigation = waitFor('Page.loadEventFired');
@@ -264,5 +274,49 @@ if (firstRequestUrl) {
     await screenshot('storage/app/visual-skpi-admin-detail.png');
 }
 
-console.log(JSON.stringify({ loginControls, registrationDesktop, registrationMobile, registrationWidths, desktop, mobile, menuInteraction, wizardInteraction, guideInteraction, skpiRequestForm, admin, darkTheme, adminSearch, bulkInteraction, adminDecision, issues: issues.length }, null, 2));
+pageNavigation = waitFor('Page.loadEventFired');
+await send('Page.navigate', { url: 'http://127.0.0.1:8000/admin/skpi' });
+await pageNavigation;
+const issuedRequestUrl = await evaluate(`(() => {
+    const row = [...document.querySelectorAll('tbody tr')].find((item) => item.textContent.includes('Terbit'));
+    return row?.querySelector('a[href*="/admin/skpi/"]:not([href$="/unduh"])')?.href;
+})()`);
+let withdrawalDialog = { available: false };
+if (issuedRequestUrl) {
+    await send('Page.navigate', { url: issuedRequestUrl });
+    await waitFor('Page.loadEventFired');
+    withdrawalDialog = await evaluate(`(() => {
+        const trigger = document.querySelector('[data-dialog-open="withdraw-skpi"]');
+        if (!trigger) return { available: false };
+        trigger.click();
+        const dialog = document.querySelector('#withdraw-skpi');
+        const opened = dialog.open;
+        dialog.querySelector('form').requestSubmit();
+        const error = dialog.querySelector('[name="withdrawal_reason"]').getAttribute('aria-invalid') === 'true';
+        dialog.querySelector('[data-dialog-close]').click();
+        return { available: true, opened, requiredError: error, closed: !dialog.open };
+    })()`);
+    await screenshot('storage/app/visual-skpi-withdraw-dialog.png');
+}
+
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+pageNavigation = waitFor('Page.loadEventFired');
+await send('Page.navigate', { url: 'http://127.0.0.1:8000/admin/mahasiswa' });
+await pageNavigation;
+const studentManagement = await evaluate(`({ rows: document.querySelectorAll('tbody tr').length, createLink: Boolean(document.querySelector('a[href$="/admin/mahasiswa/baru"]')), search: Boolean(document.querySelector('[name="q"]')), detailUrl: document.querySelector('tbody a[href*="/admin/mahasiswa/"]')?.href })`);
+if (studentManagement.detailUrl) {
+    pageNavigation = waitFor('Page.loadEventFired');
+    await send('Page.navigate', { url: studentManagement.detailUrl });
+    await pageNavigation;
+    studentManagement.edit = Boolean(await evaluate(`document.querySelector('a[href$="/ubah"]')`));
+    studentManagement.delete = Boolean(await evaluate(`[...document.querySelectorAll('button')].find((button) => button.textContent.includes('Hapus mahasiswa'))`));
+}
+await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 780, deviceScaleFactor: 1, mobile: true });
+pageNavigation = waitFor('Page.loadEventFired');
+await send('Page.navigate', { url: 'http://127.0.0.1:8000/admin/mahasiswa' });
+await pageNavigation;
+studentManagement.mobile = await evaluate(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth, menuVisible: getComputedStyle(document.querySelector('[data-sidebar-open]')).display !== 'none' })`);
+await screenshot('storage/app/visual-admin-students-mobile.png');
+
+console.log(JSON.stringify({ loginControls, registrationDesktop, registrationMobile, registrationWidths, desktop, mobile, menuInteraction, wizardInteraction, guideInteraction, skpiRequestForm, admin, darkTheme, adminSearch, bulkInteraction, adminDecision, withdrawalDialog, studentManagement, issues: issues.length }, null, 2));
 socket.close();

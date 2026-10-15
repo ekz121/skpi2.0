@@ -204,6 +204,7 @@ class SkemWorkflowTest extends TestCase
             'activity_name' => 'Sertifikat yang diperbaiki mahasiswa',
             'organizer' => 'Panitia pengujian',
             'started_at' => '2026-01-10',
+            'ended_at' => '2026-01-10',
             'certificate_number' => 'STUDENT-EDIT-001',
             'evidence' => UploadedFile::fake()->create('perbaikan.pdf', 100, 'application/pdf'),
             'action' => 'submit',
@@ -250,6 +251,7 @@ class SkemWorkflowTest extends TestCase
             'activity_name' => 'Sertifikat unggahan ulang',
             'organizer' => 'Penyelenggara uji',
             'started_at' => '2026-02-01',
+            'ended_at' => '2026-02-01',
             'certificate_number' => 'REUPLOAD-001',
             'evidence' => UploadedFile::fake()->create('unggah-ulang.pdf', 100, 'application/pdf'),
             'action' => 'submit',
@@ -308,6 +310,7 @@ class SkemWorkflowTest extends TestCase
             'activity_name' => 'Sertifikat pengujian',
             'organizer' => 'Panitia pengujian',
             'started_at' => now()->subDay()->format('Y-m-d'),
+            'ended_at' => now()->subDay()->format('Y-m-d'),
             'certificate_number' => 'TEST-CERT-001',
             'evidence' => UploadedFile::fake()->create('sertifikat.pdf', 128, 'application/pdf'),
             'action' => 'submit',
@@ -452,11 +455,161 @@ class SkemWorkflowTest extends TestCase
             ->assertDontSee('Mahasiswa Uji Alfa');
     }
 
+    public function test_validation_messages_and_auth_notifications_are_clear_in_indonesian(): void
+    {
+        $registry = StudentRegistry::whereNull('user_id')->firstOrFail();
+
+        $this->post(route('register.store'), [
+            'student_registry_id' => $registry->id,
+            'email' => 'admin@polteksi.ac.id',
+            'password' => 'abcdefgh',
+        ])->assertSessionHasErrors([
+            'email' => 'Email sudah terdaftar.',
+            'password' => 'Kata sandi harus mengandung angka.',
+        ]);
+
+        $this->withSession(['status' => 'Tautan verifikasi telah dikirim ke email Anda.'])
+            ->get(route('login'))
+            ->assertOk()
+            ->assertSee('notice-success', false)
+            ->assertSee('Tautan verifikasi telah dikirim ke email Anda.')
+            ->assertSee('data-password-toggle', false)
+            ->assertDontSee('validation.unique');
+    }
+
+    public function test_certificate_detail_validation_requires_end_date_and_secure_url(): void
+    {
+        Storage::fake('local');
+        $student = User::where('email', 'demo01@demo.polteksi.ac.id')->firstOrFail();
+        $rule = ActivityRule::firstOrFail();
+
+        $this->actingAs($student)->post(route('student.submissions.store'), [
+            'activity_rule_id' => $rule->id,
+            'activity_name' => 'Kegiatan validasi',
+            'organizer' => 'Penyelenggara uji',
+            'started_at' => '2026-03-10',
+            'ended_at' => '2026-03-09',
+            'verification_url' => 'ftp://contoh.test/sertifikat',
+            'evidence' => UploadedFile::fake()->create('bukti.pdf', 100, 'application/pdf'),
+            'action' => 'submit',
+        ])->assertSessionHasErrors([
+            'ended_at' => 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.',
+            'verification_url' => 'Tautan verifikasi harus berupa URL yang valid dan diawali http:// atau https://.',
+        ]);
+    }
+
+    public function test_only_admin_can_withdraw_an_issued_skpi_and_student_can_reapply(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+        $student = User::where('email', 'demo01@demo.polteksi.ac.id')->firstOrFail();
+        $admin = User::where('role', 'admin')->firstOrFail();
+        $certificateCount = $student->submissions()->count();
+        $old = SkpiRequest::create([
+            'user_id' => $student->id,
+            'status' => 'issued',
+            'reviewed_by' => $admin->id,
+            'document_number' => 'SKPI/POLTEKSI/2026/OLD01',
+            'docx_path' => 'skpi/'.$student->id.'/old.docx',
+            'issued_at' => now(),
+        ]);
+        Storage::disk('local')->put($old->docx_path, 'dokumen lama');
+
+        $this->actingAs($student)->put(route('admin.skpi.withdraw', $old), [
+            'withdrawal_reason' => 'Percobaan mahasiswa',
+        ])->assertForbidden();
+
+        $this->actingAs($admin)->put(route('admin.skpi.withdraw', $old), [])
+            ->assertSessionHasErrors(['withdrawal_reason' => 'Alasan penarikan wajib diisi.']);
+        $this->assertSame('issued', $old->fresh()->status);
+
+        $reason = 'Nomor ijazah perlu diperbaiki oleh bagian akademik.';
+        $this->put(route('admin.skpi.withdraw', $old), ['withdrawal_reason' => $reason])
+            ->assertRedirect(route('admin.skpi.show', $old));
+
+        $old->refresh();
+        $this->assertSame('withdrawn', $old->status);
+        $this->assertSame('SKPI/POLTEKSI/2026/OLD01', $old->document_number);
+        Storage::disk('local')->assertExists($old->docx_path);
+        $this->assertDatabaseHas('skpi_withdrawals', [
+            'skpi_request_id' => $old->id,
+            'withdrawn_by' => $admin->id,
+            'reason' => $reason,
+            'document_number' => 'SKPI/POLTEKSI/2026/OLD01',
+        ]);
+        $this->assertDatabaseHas('app_notifications', [
+            'user_id' => $student->id,
+            'title' => 'SKPI ditarik oleh admin',
+        ]);
+        $this->get(route('admin.skpi.download', $old))->assertNotFound();
+        $this->assertSame($certificateCount, $student->submissions()->count());
+
+        $this->actingAs($student)->get(route('student.skpi.download', $old))->assertForbidden();
+        $this->post(route('student.skpi.request'), [
+            'birthplace' => 'Surabaya',
+            'birthdate' => '2004-01-01',
+        ])->assertSessionHasNoErrors();
+
+        $new = $student->skpiRequests()->where('status', 'pending')->latest()->firstOrFail();
+        $this->assertNotSame($old->id, $new->id);
+        $this->actingAs($admin)->put(route('admin.skpi.update', $new), ['decision' => 'issue'])
+            ->assertSessionHasNoErrors();
+        $this->assertNotSame($old->document_number, $new->fresh()->document_number);
+    }
+
     public function test_application_uses_surabaya_time_and_word_only_schema(): void
     {
         $this->assertSame('Asia/Jakarta', config('app.timezone'));
         $this->assertFalse(Schema::hasColumn('skpi_requests', 'pdf_path'));
         $this->assertTrue(Schema::hasColumn('skpi_requests', 'docx_path'));
+    }
+
+    public function test_admin_can_create_view_update_and_delete_a_student_account(): void
+    {
+        Storage::fake('local');
+        $admin = User::where('role', 'admin')->firstOrFail();
+        $registry = StudentRegistry::whereNull('user_id')->with('studyProgram')->firstOrFail();
+
+        $this->actingAs($admin)->post(route('admin.students.store'), [
+            'student_registry_id' => $registry->id,
+            'email' => 'kelola.mahasiswa@example.test',
+            'password' => 'aman12345',
+        ])->assertSessionHasNoErrors();
+
+        $student = User::where('email', 'kelola.mahasiswa@example.test')->firstOrFail();
+        $this->assertNotNull($student->email_verified_at);
+        $this->get(route('admin.students.show', $student))->assertOk()->assertSee($registry->nim);
+
+        $this->put(route('admin.students.update', $student), [
+            'name' => 'Nama Mahasiswa Diperbarui',
+            'email' => 'kelola.baru@example.test',
+            'nim' => $registry->nim,
+            'study_program_id' => $registry->study_program_id,
+            'cohort' => 2023,
+            'birthplace' => 'Surabaya',
+            'birthdate' => '2004-05-06',
+            'graduation_year' => 2026,
+            'diploma_number' => $registry->diploma_number,
+            'academic_title' => $registry->studyProgram->academic_title,
+            'email_verified' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $student->refresh()->load('profile', 'registry');
+        $this->assertSame('Nama Mahasiswa Diperbarui', $student->name);
+        $this->assertSame('Surabaya', $student->profile->birthplace);
+        $this->assertSame('Nama Mahasiswa Diperbarui', $student->registry->name);
+
+        $this->delete(route('admin.students.destroy', $student))->assertRedirect(route('admin.students'));
+        $this->assertDatabaseMissing('users', ['id' => $student->id]);
+        $this->assertNull($registry->fresh()->user_id);
+    }
+
+    public function test_student_cannot_access_admin_student_management(): void
+    {
+        $student = User::where('role', 'student')->firstOrFail();
+
+        $this->actingAs($student)->get(route('admin.students'))->assertForbidden();
+        $this->get(route('admin.students.edit', $student))->assertForbidden();
     }
 
     public function test_all_student_pages_render_without_server_errors(): void
@@ -483,7 +636,8 @@ class SkemWorkflowTest extends TestCase
         foreach ([
             route('admin.dashboard'), route('admin.submissions.index'), route('admin.submissions.show', $submission),
             route('admin.submissions.create'), route('admin.submissions.edit', $submission),
-            route('admin.students'), route('admin.skpi.index'),
+            route('admin.students'), route('admin.students.create'), route('admin.students.show', $submission->user),
+            route('admin.students.edit', $submission->user), route('admin.skpi.index'),
         ] as $url) {
             $this->get($url)->assertOk();
         }

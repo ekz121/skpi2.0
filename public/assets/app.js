@@ -1,5 +1,91 @@
 const root = document.documentElement;
 
+document.querySelectorAll('[data-notice]').forEach((notice) => {
+    const close = () => {
+        notice.classList.add('is-closing');
+        window.setTimeout(() => notice.remove(), 160);
+    };
+    notice.querySelector('[data-notice-close]')?.addEventListener('click', close);
+    const delay = Number.parseInt(notice.dataset.autoDismiss || '', 10);
+    if (Number.isFinite(delay) && delay > 0) {
+        let timer = window.setTimeout(close, delay);
+        notice.addEventListener('mouseenter', () => window.clearTimeout(timer));
+        notice.addEventListener('mouseleave', () => { timer = window.setTimeout(close, 1800); });
+        notice.addEventListener('focusin', () => window.clearTimeout(timer));
+        notice.addEventListener('focusout', () => { timer = window.setTimeout(close, 1800); });
+    }
+});
+
+const fieldLabel = (field) => {
+    const container = field.closest('.field, [data-field-container]');
+    const label = container?.querySelector(':scope > span, :scope > label, [data-field-label]')?.textContent || field.name;
+    return label.replace(/opsional/gi, '').replace(/\*/g, '').trim() || 'Kolom ini';
+};
+
+const fieldMessage = (field) => {
+    const label = fieldLabel(field);
+    if (field.validity.valueMissing) return `${label} wajib diisi.`;
+    if (field.validity.typeMismatch && field.type === 'email') return 'Email harus berupa alamat email yang valid.';
+    if (field.validity.typeMismatch && field.type === 'url') return 'Tautan verifikasi harus berupa URL yang valid dan diawali http:// atau https://.';
+    if (field.validity.patternMismatch && field.name === 'verification_url') return 'Tautan verifikasi harus diawali http:// atau https://.';
+    if (field.validity.tooLong) return `${label} tidak boleh lebih dari ${field.maxLength} karakter.`;
+    if (field.validity.rangeOverflow) return `${label} tidak boleh melewati batas yang ditentukan.`;
+    if (field.validity.rangeUnderflow) return `${label} tidak boleh kurang dari batas yang ditentukan.`;
+    return field.validationMessage || `${label} belum valid.`;
+};
+
+const setFieldError = (field, message = '') => {
+    const container = field.closest('.field, [data-field-container]') || field.parentElement;
+    let error = container?.querySelector('[data-field-error]');
+    if (!error && container) {
+        error = document.createElement('small');
+        error.className = 'field-error';
+        error.dataset.fieldError = '';
+        error.setAttribute('role', 'alert');
+        container.append(error);
+    }
+    if (message) {
+        field.classList.add('is-invalid');
+        field.setAttribute('aria-invalid', 'true');
+        if (error) {
+            error.textContent = message;
+            error.hidden = false;
+            if (!error.id) error.id = `${field.name || field.id || 'field'}-client-error`;
+            field.setAttribute('aria-describedby', error.id);
+        }
+        return false;
+    }
+    field.classList.remove('is-invalid');
+    field.removeAttribute('aria-invalid');
+    if (error) {
+        error.textContent = '';
+        error.hidden = true;
+    }
+    return true;
+};
+
+const validateField = (field) => {
+    if (field.disabled || field.type === 'hidden') return true;
+    return setFieldError(field, field.checkValidity() ? '' : fieldMessage(field));
+};
+
+document.querySelectorAll('[data-validate-form]').forEach((form) => {
+    const fields = [...form.querySelectorAll('input:not([type="hidden"]), select, textarea')];
+    fields.forEach((field) => {
+        field.addEventListener('blur', () => validateField(field));
+        field.addEventListener('input', () => {
+            if (field.getAttribute('aria-invalid') === 'true') validateField(field);
+        });
+    });
+    form.addEventListener('submit', (event) => {
+        const invalid = fields.filter((field) => !validateField(field));
+        if (invalid.length === 0) return;
+        event.preventDefault();
+        invalid[0].focus();
+        invalid[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+});
+
 document.querySelectorAll('[data-live-clock]').forEach((clock) => {
     const timezone = clock.dataset.timezone || 'Asia/Jakarta';
     const serverTime = Date.parse(clock.dataset.serverTime || '');
@@ -122,11 +208,21 @@ if (registration) {
         option.addEventListener('pointerdown', (event) => event.preventDefault());
         option.addEventListener('click', () => chooseStudent(option));
     });
-    search.addEventListener('input', filterStudents);
+    search.addEventListener('input', () => {
+        search.setCustomValidity('');
+        setFieldError(search);
+        filterStudents();
+    });
     search.addEventListener('focus', () => {
         if (!registryId.value && search.value.trim()) filterStudents();
     });
-    search.addEventListener('blur', () => window.setTimeout(closeOptions, 120));
+    search.addEventListener('blur', () => window.setTimeout(() => {
+        closeOptions();
+        if (search.value.trim() && !registryId.value) {
+            search.setCustomValidity('Pilih nama dari hasil pencarian.');
+            setFieldError(search, 'Pilih nama dari hasil pencarian.');
+        }
+    }, 120));
     search.addEventListener('keydown', (event) => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
@@ -148,7 +244,8 @@ if (registration) {
         }
         event.preventDefault();
         search.setCustomValidity('Pilih nama dari hasil pencarian.');
-        search.reportValidity();
+        setFieldError(search, 'Pilih nama dari hasil pencarian.');
+        search.focus();
     });
 
     const selected = options.find((option) => option.dataset.id === registryId.value);
@@ -161,8 +258,10 @@ document.querySelectorAll('[data-password-toggle]').forEach((button) => {
         if (!input) return;
         const visible = input.type === 'text';
         input.type = visible ? 'password' : 'text';
-        button.textContent = visible ? 'Lihat' : 'Sembunyikan';
-        button.setAttribute('aria-label', visible ? 'Tampilkan password' : 'Sembunyikan password');
+        button.querySelector('[data-password-icon-show]').hidden = !visible;
+        button.querySelector('[data-password-icon-hide]').hidden = visible;
+        button.setAttribute('aria-label', visible ? 'Tampilkan kata sandi' : 'Sembunyikan kata sandi');
+        button.setAttribute('aria-pressed', visible ? 'false' : 'true');
         input.focus();
     });
 });
@@ -210,7 +309,7 @@ if (guideSearch) {
 
 const wizard = document.querySelector('[data-upload-wizard]');
 if (wizard) {
-    let currentStep = 1;
+    let currentStep = Number.parseInt(wizard.dataset.initialStep || '1', 10);
     const steps = [...wizard.querySelectorAll('[data-step]')];
     const indicators = [...document.querySelectorAll('[data-stepper] li')];
     const back = wizard.querySelector('[data-step-back]');
@@ -261,12 +360,24 @@ if (wizard) {
         if (currentStep === 1 && !selectedCategory()) {
             categoryInputs[0]?.focus();
             categoryInputs[0]?.setCustomValidity('Pilih satu kategori kegiatan.');
-            categoryInputs[0]?.reportValidity();
+            setFieldError(categoryInputs[0], 'Pilih satu kategori kegiatan.');
             return false;
         }
         categoryInputs.forEach((input) => input.setCustomValidity(''));
-        const fields = [...steps[currentStep - 1].querySelectorAll('input, select, textarea')].filter((field) => !field.disabled);
-        return fields.every((field) => field.reportValidity());
+        const fields = [...steps[currentStep - 1].querySelectorAll('input, select, textarea')]
+            .filter((field) => !field.disabled && field.type !== 'hidden');
+        const startedAt = wizard.querySelector('[name="started_at"]');
+        const endedAt = wizard.querySelector('[name="ended_at"]');
+        if (currentStep === 3 && startedAt && endedAt) {
+            endedAt.setCustomValidity(startedAt.value && endedAt.value && endedAt.value < startedAt.value
+                ? 'Tanggal selesai tidak boleh lebih awal dari tanggal mulai.'
+                : '');
+        }
+        const invalid = fields.filter((field) => !validateField(field));
+        if (invalid.length === 0) return true;
+        invalid[0].focus();
+        invalid[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
     };
 
     const showStep = () => {
@@ -285,6 +396,12 @@ if (wizard) {
 
     categoryInputs.forEach((input) => input.addEventListener('change', filterRules));
     ruleSelect?.addEventListener('change', updateEstimate);
+    [...wizard.querySelectorAll('input, select, textarea')].forEach((field) => {
+        field.addEventListener('blur', () => validateField(field));
+        field.addEventListener('input', () => {
+            if (field.getAttribute('aria-invalid') === 'true') validateField(field);
+        });
+    });
     next?.addEventListener('click', () => {
         if (!validateStep()) return;
         currentStep = Math.min(steps.length, currentStep + 1);
@@ -302,11 +419,22 @@ if (wizard) {
         showStep();
     });
     filterRules();
+    showStep();
 
     const fileInput = wizard.querySelector('[data-file-input]');
     fileInput?.addEventListener('change', () => {
         const fileName = wizard.querySelector('[data-file-name]');
         if (fileName) fileName.textContent = fileInput.files[0]?.name || 'PDF, JPG, JPEG, atau PNG, maksimal 5 MB';
+        const file = fileInput.files[0];
+        const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+        if (file && file.size > 5 * 1024 * 1024) {
+            fileInput.setCustomValidity('Ukuran dokumen bukti maksimal 5 MB.');
+        } else if (file && !allowed.includes(file.type)) {
+            fileInput.setCustomValidity('Dokumen bukti harus berformat PDF, JPG, JPEG, atau PNG.');
+        } else {
+            fileInput.setCustomValidity('');
+        }
+        validateField(fileInput);
     });
 }
 
@@ -314,6 +442,28 @@ document.querySelectorAll('[data-confirm]').forEach((form) => {
     form.addEventListener('submit', (event) => {
         if (!window.confirm(form.dataset.confirm)) event.preventDefault();
     });
+});
+
+document.querySelectorAll('[data-dialog-open]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const dialog = document.getElementById(button.dataset.dialogOpen);
+        if (!(dialog instanceof HTMLDialogElement)) return;
+        dialog.showModal();
+        dialog.querySelector('textarea, input, button')?.focus();
+    });
+});
+
+document.querySelectorAll('[data-dialog]').forEach((dialog) => {
+    dialog.querySelectorAll('[data-dialog-close]').forEach((button) => {
+        button.addEventListener('click', () => dialog.close());
+    });
+    dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+    });
+    if (dialog.hasAttribute('data-open-on-load')) {
+        dialog.showModal();
+        dialog.querySelector('[aria-invalid="true"], textarea, input')?.focus();
+    }
 });
 
 document.querySelectorAll('[data-bulk-form]').forEach((form) => {
@@ -345,5 +495,7 @@ document.querySelectorAll('a[href]').forEach((link) => {
         loader?.classList.add('loading');
     });
 });
-document.querySelectorAll('form').forEach((form) => form.addEventListener('submit', () => loader?.classList.add('loading')));
+document.querySelectorAll('form').forEach((form) => form.addEventListener('submit', (event) => {
+    if (!event.defaultPrevented) loader?.classList.add('loading');
+}));
 window.addEventListener('pageshow', () => loader?.classList.remove('loading'));

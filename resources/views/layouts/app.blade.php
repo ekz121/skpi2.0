@@ -27,7 +27,7 @@
                 @if(auth()->user()->isAdmin())
                     <a href="{{ route('admin.dashboard') }}" class="nav-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">@include('partials.icon', ['name' => 'dashboard'])<span>Dashboard</span></a>
                     <a href="{{ route('admin.submissions.index', ['review' => 'new']) }}" class="nav-item {{ request()->routeIs('admin.submissions.*') ? 'active' : '' }}">@include('partials.icon', ['name' => 'certificate'])<span>Sertifikat Masuk</span></a>
-                    <a href="{{ route('admin.students') }}" class="nav-item {{ request()->routeIs('admin.students') ? 'active' : '' }}">@include('partials.icon', ['name' => 'users'])<span>Rekap Mahasiswa</span></a>
+                    <a href="{{ route('admin.students') }}" class="nav-item {{ request()->routeIs('admin.students*') ? 'active' : '' }}">@include('partials.icon', ['name' => 'users'])<span>Data Mahasiswa</span></a>
                     <a href="{{ route('admin.skpi.index') }}" class="nav-item {{ request()->routeIs('admin.skpi.*') ? 'active' : '' }}">@include('partials.icon', ['name' => 'document'])<span>Permintaan SKPI</span></a>
                 @else
                     <a href="{{ route('student.dashboard') }}" class="nav-item {{ request()->routeIs('student.dashboard') ? 'active' : '' }}">@include('partials.icon', ['name' => 'dashboard'])<span>Dashboard</span></a>
@@ -87,10 +87,7 @@
                 @if(str_contains(auth()->user()->email, '@demo.'))
                     <div class="demo-banner"><strong>Data simulasi</strong><span>Seluruh identitas dan angka pada akun ini hanya untuk demonstrasi antarmuka.</span></div>
                 @endif
-                @if(session('success'))<div class="alert alert-success" role="status">@include('partials.icon', ['name' => 'check'])<span>{{ session('success') }}</span></div>@endif
-                @if($errors->any())
-                    <div class="alert alert-error" role="alert">@include('partials.icon', ['name' => 'alert'])<div><strong>Permintaan belum dapat diproses.</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div></div>
-                @endif
+                @include('partials.notifications')
                 @yield('content')
             </main>
         </section>

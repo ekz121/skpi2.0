@@ -9,9 +9,11 @@
             @if($submission->evidence_path)<a href="{{ route('evidence.download', $submission) }}" class="evidence-file">@include('partials.icon', ['name' => 'file'])<span><strong>{{ $submission->evidence_original_name }}</strong><small>Unduh untuk memeriksa dokumen</small></span>@include('partials.icon', ['name' => 'download'])</a>@else<div class="evidence-file unavailable">@include('partials.icon', ['name' => 'file'])<span><strong>Berkas tidak tersedia</strong><small>Data ini tidak mempunyai lampiran.</small></span></div>@endif
         </section>
         <aside class="panel decision-panel"><div class="rule-score"><small>Status mahasiswa</small><strong>Aktif</strong><span>{{ $submission->approved_points ?? $submission->estimated_points }} poin masuk rekap</span></div><div class="decision-rule"><strong>Pemeriksaan admin</strong><p>{{ $submission->admin_checked_at ? 'Dicek oleh '.$submission->checker?->name.' pada '.$submission->admin_checked_at->translatedFormat('d F Y, H:i').'.' : 'Belum ditandai sudah diperiksa. Status ini tidak menghambat mahasiswa.' }}</p></div>
-            @unless($submission->admin_checked_at)<form method="POST" action="{{ route('admin.submissions.check', $submission) }}">@csrf @method('PUT')<button class="button button-primary button-block" type="submit">Tandai sudah dicek</button></form>@endunless
-            <a class="button button-secondary button-block" href="{{ route('admin.submissions.edit', $submission) }}">Ubah data sertifikat</a>
-            <form method="POST" action="{{ route('admin.submissions.destroy', $submission) }}" data-confirm="Hapus sertifikat ini beserta berkas buktinya? Tindakan ini tidak dapat dibatalkan.">@csrf @method('DELETE')<button class="button button-danger button-block" type="submit">Hapus sertifikat</button></form>
+            <div class="admin-action-stack">
+                @unless($submission->admin_checked_at)<form method="POST" action="{{ route('admin.submissions.check', $submission) }}">@csrf @method('PUT')<button class="button button-primary button-block" type="submit">Tandai sudah dicek</button></form>@endunless
+                <a class="button button-secondary button-block" href="{{ route('admin.submissions.edit', $submission) }}">Ubah data sertifikat</a>
+                <form method="POST" action="{{ route('admin.submissions.destroy', $submission) }}" data-confirm="Hapus sertifikat ini beserta berkas buktinya? Tindakan ini tidak dapat dibatalkan.">@csrf @method('DELETE')<button class="button button-danger button-block" type="submit">Hapus sertifikat</button></form>
+            </div>
         </aside>
     </div>
 @endsection

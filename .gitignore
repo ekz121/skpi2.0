@@ -19,6 +19,7 @@
 /storage/*.key
 /storage/pail
 /vendor
+/skpi-hostinger-*.zip
 /.tools
 /database/*.sqlite
 /.mysql-test

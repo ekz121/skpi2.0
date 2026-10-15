@@ -26,7 +26,7 @@
         <article class="metric-card"><span class="metric-icon primary">@include('partials.icon', ['name' => 'certificate'])</span><div><small>Sertifikat tersimpan</small><strong>{{ $activityCount }}</strong><span>langsung masuk rekap</span></div></article>
         <article class="metric-card"><span class="metric-icon green">@include('partials.icon', ['name' => 'approved'])</span><div><small>Total poin</small><strong>{{ $approvedPoints }}</strong><span>informasi bobot kegiatan</span></div></article>
         <article class="metric-card"><span class="metric-icon amber">@include('partials.icon', ['name' => 'chart'])</span><div><small>Kategori terisi</small><strong>{{ $categoryPoints->count() }}</strong><span>kategori kegiatan</span></div></article>
-        <article class="metric-card"><span class="metric-icon neutral">@include('partials.icon', ['name' => 'document'])</span><div><small>Status SKPI</small><strong class="metric-word">{{ $skpi ? match($skpi->status) {'pending' => 'Diperiksa', 'rejected' => 'Ditolak', 'issued' => 'Terbit', 'failed' => 'Gagal', default => 'Belum diajukan'} : 'Belum diajukan' }}</strong><span>dokumen pendamping</span></div></article>
+        <article class="metric-card"><span class="metric-icon neutral">@include('partials.icon', ['name' => 'document'])</span><div><small>Status SKPI</small><strong class="metric-word">{{ $skpi ? match($skpi->status) {'pending' => 'Diperiksa', 'rejected' => 'Ditolak', 'issued' => 'Terbit', 'withdrawn' => 'Ditarik', 'failed' => 'Gagal', default => 'Belum diajukan'} : 'Belum diajukan' }}</strong><span>dokumen pendamping</span></div></article>
     </div>
 
     <div class="dashboard-grid">

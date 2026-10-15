@@ -18,6 +18,8 @@
         @case('logout')<path d="M10 17l5-5-5-5M15 12H3M15 3h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5"/>@break
         @case('user')<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>@break
         @case('eye')<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>@break
+        @case('eye-off')<path d="m3 3 18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.8 10.8 0 0 1 12 4c6.5 0 10 8 10 8a18 18 0 0 1-3 4.2M6.6 6.6C3.7 8.4 2 12 2 12s3.5 8 10 8a10 10 0 0 0 4.1-.9"/>@break
+        @case('info')<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-9h.01"/>@break
         @case('download')<path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/>@break
         @case('filter')<path d="M4 5h16M7 12h10M10 19h4"/>@break
         @case('search')<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>@break

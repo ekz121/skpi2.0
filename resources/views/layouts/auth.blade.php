@@ -28,13 +28,7 @@
                 <button class="icon-button auth-theme" type="button" data-theme-toggle aria-label="Ubah tema">
                     @include('partials.icon', ['name' => 'moon'])
                 </button>
-                @if(session('status'))<div class="alert alert-info">{{ session('status') }}</div>@endif
-                @if($errors->any())
-                    <div class="alert alert-error" role="alert">
-                        <strong>Periksa kembali isian Anda.</strong>
-                        <ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
-                    </div>
-                @endif
+                @include('partials.notifications')
                 @yield('content')
             </div>
         </section>

@@ -88,9 +88,9 @@ class SubmissionController extends Controller
             'activity_name' => ['required', 'string', 'max:180'],
             'organizer' => ['required', 'string', 'max:180'],
             'started_at' => ['required', 'date', 'before_or_equal:today'],
-            'ended_at' => ['nullable', 'date', 'after_or_equal:started_at'],
+            'ended_at' => ['required', 'date', 'after_or_equal:started_at'],
             'certificate_number' => ['nullable', 'string', 'max:100'],
-            'verification_url' => ['nullable', 'url', 'max:500'],
+            'verification_url' => ['nullable', 'url:http,https', 'max:500'],
             'evidence' => [$isSubmit && ! $submission->evidence_path ? 'required' : 'nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'action' => ['required', Rule::in(['submit'])],
         ]);
