@@ -173,6 +173,36 @@ const passwordToggle = await evaluate(`(() => {
     return { before, after, tapWidth: toggle.getBoundingClientRect().width, tapHeight: toggle.getBoundingClientRect().height };
 })()`);
 
+const loginKeyboard = await evaluate(`(() => {
+    const candidates = [...document.querySelectorAll('a[href], button:not([disabled]), input:not([type="hidden"]), select, textarea')]
+        .filter((item) => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden');
+    const labels = [];
+    const focusable = candidates.every((item) => {
+        item.focus();
+        labels.push(item.getAttribute('name') || item.getAttribute('aria-label') || item.textContent.trim());
+        return document.activeElement === item;
+    });
+    return { focusable, labels };
+})()`);
+
+await navigate('http://127.0.0.1:8000/daftar');
+await evaluate(`(() => {
+    const search = document.querySelector('[data-student-search]');
+    search.focus();
+    search.value = 'fadhilatul';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+})()`);
+await evaluate(`(() => {
+    const search = document.querySelector('[data-student-search]');
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+})()`);
+const registrationKeyboard = await evaluate(`({
+    selected: Boolean(document.querySelector('[data-student-registry-id]').value),
+    selectedName: document.querySelector('[data-student-search]').value,
+    listClosed: document.querySelector('[data-student-options]').hidden,
+})`);
+
 console.log(JSON.stringify({
     admin: {
         pages: routeChecks.length,
@@ -191,6 +221,7 @@ console.log(JSON.stringify({
     mailHealth,
     verification,
     passwordToggle,
+    keyboard: { loginKeyboard, registrationKeyboard },
     browserIssues: issues.length,
 }, null, 2));
 socket.close();
