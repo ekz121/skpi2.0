@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title') · SKEM Polteksi</title>
-    <link rel="stylesheet" href="{{ asset('assets/app.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/app.css') }}?v={{ filemtime(public_path('assets/app.css')) }}">
     <script>document.documentElement.classList.add('js'); document.documentElement.dataset.theme = localStorage.getItem('skem-theme') || 'light';</script>
 </head>
 <body class="auth-body">
@@ -33,6 +33,6 @@
             </div>
         </section>
     </main>
-    <script src="{{ asset('assets/app.js') }}" defer></script>
+    <script src="{{ asset('assets/app.js') }}?v={{ filemtime(public_path('assets/app.js')) }}" defer></script>
 </body>
 </html>

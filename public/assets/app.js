@@ -116,6 +116,7 @@ if (registration) {
     const options = [...registration.querySelectorAll('[data-student-option]')];
     const empty = registration.querySelector('[data-student-empty]');
     const status = registration.querySelector('[data-student-search-status]');
+    const accountStatus = registration.querySelector('[data-student-account-status]');
     let visibleOptions = [];
     let activeIndex = -1;
 
@@ -156,8 +157,19 @@ if (registration) {
 
     const chooseStudent = (option) => {
         search.value = option.dataset.name;
+        if (option.dataset.available !== 'true') {
+            registryId.value = '';
+            search.setCustomValidity('Nama ini sudah memiliki akun. Silakan masuk atau gunakan lupa password.');
+            options.forEach((item) => item.setAttribute('aria-selected', item === option ? 'true' : 'false'));
+            syncRegistry(option);
+            if (accountStatus) accountStatus.hidden = false;
+            setFieldError(search);
+            closeOptions();
+            return;
+        }
         registryId.value = option.dataset.id;
         search.setCustomValidity('');
+        if (accountStatus) accountStatus.hidden = true;
         options.forEach((item) => item.setAttribute('aria-selected', item === option ? 'true' : 'false'));
         syncRegistry(option);
         closeOptions();
@@ -172,7 +184,7 @@ if (registration) {
         return Number.POSITIVE_INFINITY;
     };
 
-    const filterStudents = () => {
+    const filterStudents = (showInitial = false) => {
         const query = normalize(search.value);
         registryId.value = '';
         options.forEach((option) => {
@@ -182,15 +194,15 @@ if (registration) {
         });
         syncRegistry();
 
-        if (query.length === 0) {
-            status.textContent = 'Ketik nama untuk memulai pencarian.';
+        if (query.length === 0 && !showInitial) {
+            status.textContent = 'Sentuh kolom untuk melihat daftar nama.';
             closeOptions();
             return;
         }
 
         visibleOptions = options
             .map((option, order) => ({ option, order, score: matchScore(option, query) }))
-            .filter((item) => Number.isFinite(item.score))
+            .filter((item) => showInitial && query.length === 0 ? true : Number.isFinite(item.score))
             .sort((left, right) => left.score - right.score || left.order - right.order)
             .slice(0, 8)
             .map((item) => item.option);
@@ -200,29 +212,40 @@ if (registration) {
         optionList.hidden = false;
         search.setAttribute('aria-expanded', 'true');
         status.textContent = visibleOptions.length === 0
-            ? 'Nama tidak ditemukan.'
+            ? 'Nama atau NIM tidak ditemukan.'
             : `${visibleOptions.length} nama ditemukan.`;
     };
 
     options.forEach((option) => {
-        option.addEventListener('pointerdown', (event) => event.preventDefault());
+        option.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            if (event.pointerType === 'touch' || event.pointerType === 'pen') chooseStudent(option);
+        });
         option.addEventListener('click', () => chooseStudent(option));
     });
-    search.addEventListener('input', () => {
+    const runSearch = () => {
         search.setCustomValidity('');
+        if (accountStatus) accountStatus.hidden = true;
         setFieldError(search);
         filterStudents();
-    });
+    };
+    search.addEventListener('input', runSearch);
+    search.addEventListener('search', runSearch);
+    search.addEventListener('compositionend', runSearch);
     search.addEventListener('focus', () => {
-        if (!registryId.value && search.value.trim()) filterStudents();
+        if (!registryId.value) filterStudents(true);
     });
-    search.addEventListener('blur', () => window.setTimeout(() => {
+    search.addEventListener('click', () => {
+        if (!registryId.value && optionList.hidden) filterStudents(true);
+    });
+    search.addEventListener('blur', (event) => window.setTimeout(() => {
+        if (event.relatedTarget && optionList.contains(event.relatedTarget)) return;
         closeOptions();
         if (search.value.trim() && !registryId.value) {
             search.setCustomValidity('Pilih nama dari hasil pencarian.');
             setFieldError(search, 'Pilih nama dari hasil pencarian.');
         }
-    }, 120));
+    }, 280));
     search.addEventListener('keydown', (event) => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
@@ -264,6 +287,48 @@ document.querySelectorAll('[data-password-toggle]').forEach((button) => {
         button.setAttribute('aria-pressed', visible ? 'false' : 'true');
         input.focus();
     });
+});
+
+document.querySelectorAll('[data-user-role-form]').forEach((form) => {
+    const role = form.querySelector('[data-role-select]');
+    const faculty = form.querySelector('[data-faculty-select]');
+    const program = form.querySelector('[data-program-select]');
+    const studentFields = form.querySelector('[data-student-fields]');
+    const facultyRequired = form.querySelector('[data-faculty-required]');
+    const facultyOptional = form.querySelector('[data-faculty-optional]');
+    const programOptions = program ? [...program.options] : [];
+
+    const updatePrograms = () => {
+        if (!program || !faculty) return;
+        const selectedFaculty = faculty.value;
+        programOptions.forEach((option) => {
+            if (option.value) option.hidden = Boolean(selectedFaculty && option.dataset.faculty !== selectedFaculty);
+        });
+        if (program.options[program.selectedIndex]?.hidden) program.value = '';
+    };
+
+    const updateRoleFields = () => {
+        if (!role) return;
+        const isStudent = role.value === 'student';
+        const needsProgram = isStudent || role.value === 'program_verifier';
+        const needsFaculty = role.value === 'leader';
+        if (studentFields) {
+            studentFields.hidden = !isStudent;
+            studentFields.querySelectorAll('input, select').forEach((input) => {
+                input.disabled = !isStudent;
+                input.required = isStudent;
+            });
+        }
+        if (program) program.required = needsProgram;
+        if (faculty) faculty.required = needsFaculty;
+        if (facultyRequired) facultyRequired.hidden = !needsFaculty;
+        if (facultyOptional) facultyOptional.hidden = needsFaculty;
+    };
+
+    role?.addEventListener('change', updateRoleFields);
+    faculty?.addEventListener('change', updatePrograms);
+    updatePrograms();
+    updateRoleFields();
 });
 
 document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
@@ -317,7 +382,13 @@ if (wizard) {
     const submit = wizard.querySelector('[data-step-submit]');
     const categoryInputs = [...wizard.querySelectorAll('[name="category_picker"]')];
     const ruleSelect = wizard.querySelector('[data-rule-select]');
-    const estimate = wizard.querySelector('[data-estimate] strong');
+    const ruleField = wizard.querySelector('[data-rule-field]');
+    const fixedRule = wizard.querySelector('[data-fixed-rule]');
+    const fixedRuleOutput = wizard.querySelector('[data-fixed-rule-output]');
+    const customRuleField = wizard.querySelector('[data-custom-rule-field]');
+    const customActivityType = wizard.querySelector('[data-custom-activity-type]');
+    const estimateBox = wizard.querySelector('[data-estimate]');
+    const estimate = estimateBox?.querySelector('strong');
     const evidenceLabel = wizard.querySelector('[data-evidence-label]');
 
     const selectedCategory = () => wizard.querySelector('[name="category_picker"]:checked')?.value || '';
@@ -325,30 +396,47 @@ if (wizard) {
 
     const filterRules = () => {
         const category = selectedCategory();
+        const matchingOptions = [];
         [...ruleSelect.options].forEach((option, index) => {
             if (index === 0) return;
-            option.hidden = option.dataset.category !== category;
-            option.disabled = option.dataset.category !== category;
+            const matches = option.dataset.category === category;
+            option.hidden = !matches;
+            option.disabled = !matches;
+            if (matches) matchingOptions.push(option);
         });
         if (ruleSelect.selectedOptions[0]?.dataset.category !== category) ruleSelect.value = '';
+        if (matchingOptions.length === 1 && ['custom', 'fixed'].includes(matchingOptions[0].dataset.entryMode)) {
+            ruleSelect.value = matchingOptions[0].value;
+        }
         updateEstimate();
     };
 
     const updateEstimate = () => {
         const option = selectedRule();
+        const mode = option?.dataset.entryMode || 'standard';
         const points = option?.dataset.points || '0';
+        if (ruleField) ruleField.hidden = mode === 'custom' || mode === 'fixed';
+        if (fixedRule) fixedRule.hidden = mode !== 'fixed';
+        if (fixedRuleOutput) fixedRuleOutput.textContent = option?.dataset.activityType || 'Magang Industri';
+        if (customRuleField) customRuleField.hidden = mode !== 'custom';
+        if (customActivityType) {
+            customActivityType.disabled = mode !== 'custom';
+            customActivityType.required = mode === 'custom';
+        }
+        if (estimateBox) estimateBox.hidden = mode === 'custom';
         if (estimate) estimate.textContent = points;
         if (evidenceLabel) evidenceLabel.textContent = option?.dataset.evidence || 'Pilih kegiatan untuk melihat bukti yang diperlukan.';
     };
 
     const updateSummary = () => {
         const option = selectedRule();
+        const isCustom = option?.dataset.entryMode === 'custom';
         const values = {
             category: selectedCategory() || 'Belum dipilih',
-            rule: option?.value ? option.textContent.trim() : 'Belum dipilih',
+            rule: isCustom ? (customActivityType?.value.trim() || 'Belum diisi') : (option?.dataset.activityType || (option?.value ? option.textContent.trim() : 'Belum dipilih')),
             activity: wizard.querySelector('[name="activity_name"]')?.value || 'Belum diisi',
             organizer: wizard.querySelector('[name="organizer"]')?.value || 'Belum diisi',
-            points: `${option?.dataset.points || 0} poin`,
+            points: isCustom ? '-' : `${option?.dataset.points || 0} poin`,
         };
         Object.entries(values).forEach(([key, value]) => {
             const target = wizard.querySelector(`[data-summary-output="${key}"]`);
@@ -437,6 +525,22 @@ if (wizard) {
         validateField(fileInput);
     });
 }
+
+document.querySelectorAll('[data-custom-rule-select]').forEach((select) => {
+    const form = select.closest('form');
+    const field = form?.querySelector('[data-admin-custom-rule-field]');
+    const input = field?.querySelector('input');
+    const syncCustomRule = () => {
+        const isCustom = select.selectedOptions[0]?.dataset.entryMode === 'custom';
+        if (field) field.hidden = !isCustom;
+        if (input) {
+            input.disabled = !isCustom;
+            input.required = isCustom;
+        }
+    };
+    select.addEventListener('change', syncCustomRule);
+    syncCustomRule();
+});
 
 document.querySelectorAll('[data-confirm]').forEach((form) => {
     form.addEventListener('submit', (event) => {

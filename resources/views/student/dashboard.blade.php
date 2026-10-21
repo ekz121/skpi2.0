@@ -37,7 +37,7 @@
             @else
                 <div class="table-wrap"><table><thead><tr><th>Kegiatan</th><th>Kategori</th><th>Poin</th><th>Status</th><th></th></tr></thead><tbody>
                 @foreach($recentSubmissions as $submission)
-                    <tr><td><strong>{{ $submission->activity_name }}</strong><small>{{ $submission->started_at->translatedFormat('d M Y') }}</small></td><td>{{ $submission->rule->category }}</td><td><strong>{{ $submission->approved_points }}</strong></td><td><span class="status status-approved">Tersimpan</span></td><td><a class="table-action" href="{{ route('student.submissions.show', $submission) }}" aria-label="Lihat {{ $submission->activity_name }}">@include('partials.icon', ['name' => 'chevron'])</a></td></tr>
+                    <tr><td><strong>{{ $submission->activity_name }}</strong><small>{{ $submission->started_at->translatedFormat('d M Y') }}</small></td><td>{{ $submission->categoryLabel() }}<small>{{ $submission->activityTypeLabel() }}</small></td><td><strong>{{ $submission->isCustomType() ? '-' : $submission->approved_points }}</strong></td><td><span class="status status-approved">Tersimpan</span></td><td><a class="table-action" href="{{ route('student.submissions.show', $submission) }}" aria-label="Lihat {{ $submission->activity_name }}">@include('partials.icon', ['name' => 'chevron'])</a></td></tr>
                 @endforeach
                 </tbody></table></div>
             @endif

@@ -8,11 +8,14 @@ $projectDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $vendorAutoload = Join-Path $projectDir 'vendor\autoload.php'
 $databaseExport = Join-Path $projectDir 'database\skpi-hostinger.sql'
 $databaseUpdate = Join-Path $projectDir 'database\update-2026-10-14.sql'
+$databaseUserUpdate = Join-Path $projectDir 'database\update-2026-10-15.sql'
+$databaseCertificateUpdate = Join-Path $projectDir 'database\update-2026-10-19.sql'
+$databaseAccountRepair = Join-Path $projectDir 'database\update-2026-10-21.sql'
 $publicIndex = Join-Path $PSScriptRoot 'hostinger-no-ssh\public_html\index.php'
 $guide = Join-Path $projectDir 'docs\PANDUAN-HOSTINGER.md'
 $outputPath = Join-Path $projectDir $Output
 
-foreach ($requiredFile in @($vendorAutoload, $databaseExport, $databaseUpdate, $publicIndex, $guide)) {
+foreach ($requiredFile in @($vendorAutoload, $databaseExport, $databaseUpdate, $databaseUserUpdate, $databaseCertificateUpdate, $databaseAccountRepair, $publicIndex, $guide)) {
     if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
         throw "File wajib tidak ditemukan: $requiredFile"
     }
@@ -117,12 +120,15 @@ SKPI_SIGNATORY_NIDN="GANTI_NIDN_PEJABAT"
 SKPI_INSTITUTION_ACCREDITATION=""
 "@
     $utf8WithoutBom = New-Object Text.UTF8Encoding($false)
-    [IO.File]::WriteAllText((Join-Path $applicationDir '.env'), $environment, $utf8WithoutBom)
+    [IO.File]::WriteAllText((Join-Path $applicationDir '.env.hostinger.example'), $environment, $utf8WithoutBom)
 
     $databaseDir = Join-Path $stageDir 'database-import'
     New-Item -ItemType Directory -Path $databaseDir -Force | Out-Null
     Copy-Item -LiteralPath $databaseExport -Destination (Join-Path $databaseDir 'skpi-hostinger.sql') -Force
     Copy-Item -LiteralPath $databaseUpdate -Destination (Join-Path $databaseDir 'update-2026-10-14.sql') -Force
+    Copy-Item -LiteralPath $databaseUserUpdate -Destination (Join-Path $databaseDir 'update-2026-10-15.sql') -Force
+    Copy-Item -LiteralPath $databaseCertificateUpdate -Destination (Join-Path $databaseDir 'update-2026-10-19.sql') -Force
+    Copy-Item -LiteralPath $databaseAccountRepair -Destination (Join-Path $databaseDir 'update-2026-10-21.sql') -Force
     Copy-Item -LiteralPath $guide -Destination (Join-Path $stageDir 'PANDUAN-HOSTINGER.md') -Force
 
     if (Test-Path -LiteralPath $outputPath) {

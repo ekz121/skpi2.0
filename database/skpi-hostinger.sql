@@ -23,7 +23,7 @@ CREATE TABLE `activity_rules` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `activity_rules_category_subcategory_index` (`category`,`subcategory`)
-) ENGINE=InnoDB AUTO_INCREMENT=75 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=77 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `activity_rules` (`id`, `category`, `subcategory`, `activity_type`, `level`, `achievement`, `duration_label`, `points`, `evidence_label`, `is_mandatory`, `is_active`, `created_at`, `updated_at`) VALUES
 ('1', 'Prestasi Akademik dan Nonakademik', 'Prestasi lomba akademik', 'Lomba', 'Nasional', 'Juara 1', NULL, '200', 'Sertifikat Juara 1', '0', '1', '2026-10-12 19:22:49', '2026-10-12 19:22:49'),
@@ -99,7 +99,9 @@ INSERT INTO `activity_rules` (`id`, `category`, `subcategory`, `activity_type`, 
 ('71', 'Organisasi dan Kepemimpinan', 'Jabatan, kepanitiaan, dan ekstrakurikuler', 'Keikutsertaan ekstrakurikuler minimal 1 semester dan hadir minimal 10 kali', NULL, NULL, NULL, '50', 'Sertifikat Keikutsertaan Ekstrakurikuler', '0', '1', '2026-10-12 19:22:49', '2026-10-12 19:22:49'),
 ('72', 'Organisasi dan Kepemimpinan', 'Jabatan, kepanitiaan, dan ekstrakurikuler', 'Anggota/volunteer kegiatan', NULL, NULL, NULL, '30', 'Sertifikat atau SK resmi', '0', '1', '2026-10-12 19:22:49', '2026-10-12 19:22:49'),
 ('73', 'Proyek, Penelitian, dan Pengabdian Masyarakat', 'Proyek, penelitian, dan pengabdian', 'Keterlibatan lebih dari 3 bulan', NULL, NULL, '> 3 bulan', '50', 'Bukti jurnal/proyek keikutsertaan', '0', '1', '2026-10-12 19:22:49', '2026-10-12 19:22:49'),
-('74', 'Proyek, Penelitian, dan Pengabdian Masyarakat', 'Proyek, penelitian, dan pengabdian', 'Keterlibatan 2 minggu sampai 1 bulan', NULL, NULL, '2 minggu - 1 bulan', '30', 'Bukti jurnal/proyek keikutsertaan', '0', '1', '2026-10-12 19:22:49', '2026-10-12 19:22:49');
+('74', 'Proyek, Penelitian, dan Pengabdian Masyarakat', 'Proyek, penelitian, dan pengabdian', 'Keterlibatan 2 minggu sampai 1 bulan', NULL, NULL, '2 minggu - 1 bulan', '30', 'Bukti jurnal/proyek keikutsertaan', '0', '1', '2026-10-12 19:22:49', '2026-10-12 19:22:49'),
+('75', 'Sertifikat Magang', 'Magang', 'Magang Industri', NULL, NULL, NULL, '60', 'Sertifikat magang', '0', '1', '2026-10-19 00:00:00', '2026-10-19 00:00:00'),
+('76', 'Sertifikat Lain-lain', 'Lain-lain', 'Lain-lain', NULL, NULL, NULL, '0', 'Sertifikat atau dokumen resmi', '0', '1', '2026-10-19 00:00:00', '2026-10-19 00:00:00');
 
 DROP TABLE IF EXISTS `app_notifications`;
 CREATE TABLE `app_notifications` (
@@ -187,7 +189,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) NOT NULL,
   `batch` int(11) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES
 ('1', '0001_01_01_000000_create_users_table', '1'),
@@ -198,7 +200,25 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES
 ('6', '2026_10_07_000300_update_default_admin_credentials', '1'),
 ('7', '2026_10_08_000400_add_admin_review_to_submissions', '1'),
 ('8', '2026_10_09_000500_add_student_registry_and_word_only_delivery', '1'),
-('9', '2026_10_14_000600_add_skpi_withdrawal_history', '1');
+('9', '2026_10_14_000600_add_skpi_withdrawal_history', '1'),
+('10', '2026_10_15_000700_add_user_management', '1'),
+('11', '2026_10_19_000800_add_special_certificate_types', '1'),
+('12', '2026_10_21_000900_reconcile_student_accounts', '1');
+
+DROP TABLE IF EXISTS `faculties`;
+CREATE TABLE `faculties` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `code` varchar(30) NOT NULL,
+  `name` varchar(150) NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `faculties_code_unique` (`code`),
+  UNIQUE KEY `faculties_name_unique` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `faculties` (`id`, `code`, `name`, `created_at`, `updated_at`) VALUES
+('1', 'POLTEKSI', 'Politeknik Semen Indonesia', '2026-10-15 00:00:00', '2026-10-15 00:00:00');
 
 DROP TABLE IF EXISTS `password_reset_tokens`;
 CREATE TABLE `password_reset_tokens` (
@@ -402,6 +422,7 @@ INSERT INTO `student_registries` (`id`, `study_program_id`, `user_id`, `nim`, `n
 DROP TABLE IF EXISTS `study_programs`;
 CREATE TABLE `study_programs` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `faculty_id` bigint(20) unsigned DEFAULT NULL,
   `code` varchar(20) NOT NULL,
   `national_code` varchar(10) DEFAULT NULL,
   `name` varchar(255) NOT NULL,
@@ -413,7 +434,9 @@ CREATE TABLE `study_programs` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `study_programs_code_unique` (`code`),
   UNIQUE KEY `study_programs_name_unique` (`name`),
-  UNIQUE KEY `study_programs_national_code_unique` (`national_code`)
+  UNIQUE KEY `study_programs_national_code_unique` (`national_code`),
+  KEY `study_programs_faculty_id_foreign` (`faculty_id`),
+  CONSTRAINT `study_programs_faculty_id_foreign` FOREIGN KEY (`faculty_id`) REFERENCES `faculties` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `study_programs` (`id`, `code`, `national_code`, `name`, `academic_title`, `accreditation`, `learning_outcomes`, `created_at`, `updated_at`) VALUES
@@ -421,6 +444,8 @@ INSERT INTO `study_programs` (`id`, `code`, `national_code`, `name`, `academic_t
 ('2', 'TM', '21401', 'Teknologi Mesin', 'A.Md.T.', NULL, '[]', '2026-10-12 19:22:49', '2026-10-12 19:22:49'),
 ('3', 'AP', '61401', 'Administrasi Perkantoran', 'A.Md.A.B.', NULL, '[]', '2026-10-12 19:22:49', '2026-10-12 19:22:49'),
 ('4', 'AK', '62401', 'Akuntansi', 'A.Md.Ak.', NULL, '[]', '2026-10-12 19:22:49', '2026-10-12 19:22:49');
+
+UPDATE `study_programs` SET `faculty_id` = 1;
 
 DROP TABLE IF EXISTS `submission_decisions`;
 CREATE TABLE `submission_decisions` (
@@ -445,6 +470,7 @@ CREATE TABLE `submissions` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint(20) unsigned NOT NULL,
   `activity_rule_id` bigint(20) unsigned NOT NULL,
+  `custom_activity_type` varchar(180) DEFAULT NULL,
   `activity_name` varchar(255) NOT NULL,
   `organizer` varchar(255) NOT NULL,
   `started_at` date NOT NULL,
@@ -493,7 +519,12 @@ CREATE TABLE `users` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
   `email` varchar(255) NOT NULL,
-  `role` enum('student','admin') NOT NULL DEFAULT 'student',
+  `role` enum('student','program_verifier','admin','leader') NOT NULL DEFAULT 'student',
+  `faculty_id` bigint(20) unsigned DEFAULT NULL,
+  `study_program_id` bigint(20) unsigned DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `deactivated_at` timestamp NULL DEFAULT NULL,
+  `deactivated_by` bigint(20) unsigned DEFAULT NULL,
   `email_verified_at` timestamp NULL DEFAULT NULL,
   `password` varchar(255) NOT NULL,
   `remember_token` varchar(100) DEFAULT NULL,
@@ -501,7 +532,14 @@ CREATE TABLE `users` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `users_email_unique` (`email`),
-  KEY `users_role_index` (`role`)
+  KEY `users_role_index` (`role`),
+  KEY `users_faculty_id_foreign` (`faculty_id`),
+  KEY `users_study_program_id_foreign` (`study_program_id`),
+  KEY `users_is_active_index` (`is_active`),
+  KEY `users_deactivated_by_foreign` (`deactivated_by`),
+  CONSTRAINT `users_faculty_id_foreign` FOREIGN KEY (`faculty_id`) REFERENCES `faculties` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `users_study_program_id_foreign` FOREIGN KEY (`study_program_id`) REFERENCES `study_programs` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `users_deactivated_by_foreign` FOREIGN KEY (`deactivated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `users` (`id`, `name`, `email`, `role`, `email_verified_at`, `password`, `remember_token`, `created_at`, `updated_at`) VALUES
@@ -515,5 +553,10 @@ INSERT INTO `users` (`id`, `name`, `email`, `role`, `email_verified_at`, `passwo
 ('8', 'Mahasiswa Uji Gina', 'demo07@demo.polteksi.ac.id', 'student', '2026-10-12 19:22:51', '$2y$12$zVGYWIyP15S1J3K3mnfuYeFMrrvG5R9th9oA.0Isf4CQx.YqKLmwS', NULL, '2026-10-12 19:22:51', '2026-10-12 19:22:51'),
 ('9', 'Mahasiswa Uji Hadi', 'demo08@demo.polteksi.ac.id', 'student', '2026-10-12 19:22:51', '$2y$12$/xiy/kDpAPTHGG304VTAoO4PKLH51BpGcURyvpcfzJ13M7.ZuoWEa', NULL, '2026-10-12 19:22:51', '2026-10-12 19:22:51'),
 ('10', 'Mahasiswa Uji Intan', 'demo09@demo.polteksi.ac.id', 'student', '2026-10-12 19:22:51', '$2y$12$R/48TQKO4NjPVMinVzk2fegjFqg/jRr.HZEjqwE0.qOznaTUVwoj6', NULL, '2026-10-12 19:22:51', '2026-10-12 19:22:51');
+
+UPDATE `users` SET `faculty_id` = 1;
+UPDATE `users` AS `u`
+INNER JOIN `student_profiles` AS `sp` ON `sp`.`user_id` = `u`.`id`
+SET `u`.`study_program_id` = `sp`.`study_program_id`;
 
 SET FOREIGN_KEY_CHECKS = 1;

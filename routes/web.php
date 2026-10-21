@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SubmissionController;
 use Illuminate\Support\Facades\Route;
@@ -12,7 +14,7 @@ Route::get('/', function () {
         return redirect()->route('login');
     }
 
-    return redirect()->route(auth()->user()->isAdmin() ? 'admin.dashboard' : 'student.dashboard');
+    return redirect()->route(auth()->user()->dashboardRouteName());
 });
 
 Route::middleware('guest')->group(function () {
@@ -26,19 +28,21 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [AuthController::class, 'reset'])->middleware('throttle:password-reset')->name('password.update');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/keluar', [AuthController::class, 'logout'])->name('logout');
     Route::get('/verifikasi-email', [AuthController::class, 'verificationNotice'])->name('verification.notice');
     Route::get('/verifikasi-email/{id}/{hash}', [AuthController::class, 'verifyEmail'])
         ->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
     Route::post('/verifikasi-email/kirim-ulang', [AuthController::class, 'resendVerification'])
         ->middleware('throttle:6,1')->name('verification.send');
+    Route::put('/verifikasi-email/alamat', [AuthController::class, 'updateUnverifiedEmail'])
+        ->middleware('throttle:6,1')->name('verification.email.update');
     Route::get('/bukti/{submission}', [SubmissionController::class, 'downloadEvidence'])->name('evidence.download');
     Route::delete('/notifikasi', [NotificationController::class, 'destroyAll'])->name('notifications.destroy-all');
     Route::delete('/notifikasi/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 });
 
-Route::prefix('mahasiswa')->name('student.')->middleware(['auth', 'verified', 'role:student'])->group(function () {
+Route::prefix('mahasiswa')->name('student.')->middleware(['auth', 'active', 'verified', 'role:student'])->group(function () {
     Route::get('/dashboard', [StudentController::class, 'dashboard'])->name('dashboard');
     Route::get('/profil', [StudentController::class, 'profile'])->name('profile');
     Route::put('/profil', [StudentController::class, 'updateProfile'])->name('profile.update');
@@ -56,8 +60,13 @@ Route::prefix('mahasiswa')->name('student.')->middleware(['auth', 'verified', 'r
     Route::get('/skpi/{skpiRequest}/unduh', [StudentController::class, 'downloadSkpi'])->name('skpi.download');
 });
 
-Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->group(function () {
+Route::prefix('staf')->name('staff.')->middleware(['auth', 'active', 'role:program_verifier,leader'])->group(function () {
+    Route::get('/dashboard', [StaffController::class, 'dashboard'])->name('dashboard');
+});
+
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'active', 'role:admin'])->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+    Route::post('/email-uji', [AdminController::class, 'sendTestEmail'])->middleware('throttle:3,1')->name('email.test');
     Route::get('/sertifikat', [AdminController::class, 'submissions'])->name('submissions.index');
     Route::get('/sertifikat/baru', [AdminController::class, 'createSubmission'])->name('submissions.create');
     Route::post('/sertifikat', [AdminController::class, 'storeSubmission'])->name('submissions.store');
@@ -67,12 +76,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'role:admin'])->grou
     Route::put('/sertifikat/{submission}/cek', [AdminController::class, 'checkSubmission'])->name('submissions.check');
     Route::delete('/sertifikat/{submission}', [AdminController::class, 'destroySubmission'])->name('submissions.destroy');
     Route::get('/mahasiswa', [AdminController::class, 'students'])->name('students');
-    Route::get('/mahasiswa/baru', [AdminController::class, 'createStudent'])->name('students.create');
-    Route::post('/mahasiswa', [AdminController::class, 'storeStudent'])->name('students.store');
     Route::get('/mahasiswa/{student}', [AdminController::class, 'showStudent'])->name('students.show');
     Route::get('/mahasiswa/{student}/ubah', [AdminController::class, 'editStudent'])->name('students.edit');
     Route::put('/mahasiswa/{student}', [AdminController::class, 'updateStudent'])->name('students.update');
     Route::delete('/mahasiswa/{student}', [AdminController::class, 'destroyStudent'])->name('students.destroy');
+    Route::put('/pengguna/{user}/password', [UserManagementController::class, 'resetPassword'])->name('users.password');
+    Route::put('/pengguna/{user}/status', [UserManagementController::class, 'toggleStatus'])->name('users.status');
+    Route::resource('/pengguna', UserManagementController::class)->only(['index', 'show', 'edit', 'update', 'destroy'])->parameters(['pengguna' => 'user'])->names('users');
     Route::get('/skpi', [AdminController::class, 'skpiRequests'])->name('skpi.index');
     Route::post('/skpi/aksi-massal', [AdminController::class, 'bulkSkpi'])->name('skpi.bulk');
     Route::get('/skpi/{skpiRequest}/unduh', [AdminController::class, 'downloadSkpi'])->name('skpi.download');

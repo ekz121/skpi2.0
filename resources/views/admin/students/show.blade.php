@@ -28,7 +28,7 @@
     </div>
 
     <section class="panel danger-zone">
-        <div><h2>Hapus akun mahasiswa</h2><p>Menghapus akun juga menghapus sertifikat, permintaan SKPI, notifikasi, dan berkas terkait. Data induk akademik tetap disimpan agar mahasiswa dapat mendaftar ulang.</p></div>
-        <form method="POST" action="{{ route('admin.students.destroy', $student) }}" data-confirm="Hapus akun {{ $student->name }} beserta seluruh data transaksinya? Tindakan ini tidak dapat dibatalkan.">@csrf @method('DELETE')<button type="submit" class="button button-danger">Hapus mahasiswa</button></form>
+        <div><h2>{{ $student->hasRelatedAcademicData() ? 'Nonaktifkan akun mahasiswa' : 'Hapus akun mahasiswa' }}</h2><p>{{ $student->hasRelatedAcademicData() ? 'Akun memiliki data akademik terkait. Data tetap disimpan dan hanya akses masuk yang dihentikan.' : 'Akun belum memiliki data terkait sehingga dapat dihapus permanen. Data induk tetap tersedia untuk pendaftaran ulang.' }}</p></div>
+        <form method="POST" action="{{ route('admin.students.destroy', $student) }}" data-confirm="{{ $student->hasRelatedAcademicData() ? 'Nonaktifkan akun '.$student->name.'?' : 'Hapus akun '.$student->name.' secara permanen?' }}">@csrf @method('DELETE')<button type="submit" class="button button-danger">{{ $student->hasRelatedAcademicData() ? 'Nonaktifkan akun' : 'Hapus permanen' }}</button></form>
     </section>
 @endsection

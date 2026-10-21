@@ -30,6 +30,23 @@
             <div><small>SKPI terbit</small><strong>{{ $issuedCount }}</strong><span>dokumen Word tersedia</span></div>
         </article>
     </div>
+    <section class="panel mail-health-panel">
+        <div>
+            <p class="section-kicker">Pengiriman email</p>
+            <h2>{{ $mailReady ? 'SMTP siap digunakan' : 'SMTP belum lengkap' }}</h2>
+            <p>
+                @if($mailReady)
+                    Kirim email uji sebelum membuka pendaftaran untuk memastikan server menerima konfigurasi produksi.
+                @else
+                    Lengkapi {{ implode(', ', $mailMissing) }} pada file .env produksi, lalu bersihkan cache konfigurasi.
+                @endif
+            </p>
+        </div>
+        <form method="POST" action="{{ route('admin.email.test') }}">
+            @csrf
+            <button class="button {{ $mailReady ? 'button-secondary' : 'button-quiet' }}" type="submit" @disabled(! $mailReady)>Kirim email uji ke admin</button>
+        </form>
+    </section>
     <div class="dashboard-grid admin-dashboard-grid">
         <section class="panel panel-table">
             <div class="panel-head">
@@ -60,9 +77,9 @@
                                 <tr>
                                     <td><strong>{{ $item->user->name }}</strong><small>{{ $item->user->profile?->nim }}</small>
                                     </td>
-                                    <td><strong>{{ $item->activity_name }}</strong><small>{{ $item->rule->category }}</small>
+                                    <td><strong>{{ $item->activity_name }}</strong><small>{{ $item->categoryLabel() }}</small>
                                     </td>
-                                    <td>{{ $item->approved_points ?? $item->estimated_points }}</td>
+                                    <td>{{ $item->pointsLabel() }}</td>
                                     <td>{{ $item->submitted_at?->diffForHumans() }}</td>
                                     <td><a href="{{ route('admin.submissions.show', $item) }}" class="table-action"
                                             aria-label="Cek sertifikat {{ $item->activity_name }}">@include('partials.icon', ['name' => 'chevron'])</a>

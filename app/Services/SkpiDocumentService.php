@@ -62,12 +62,11 @@ class SkpiDocumentService
             'learning_outcomes' => $profile->studyProgram->learning_outcomes ?? [],
             'issued_date' => now()->toDateString(),
             'activities' => collect($activities)->map(fn ($activity) => [
-                'category' => $activity->rule->category,
-                'activity_type' => $activity->rule->activity_type,
+                'category' => $activity->categoryLabel(),
+                'activity_type' => $activity->activityTypeLabel(),
                 'name' => $activity->activity_name,
                 'organizer' => $activity->organizer,
                 'year' => $activity->started_at->year,
-                'points' => $activity->approved_points ?? $activity->estimated_points,
             ])->values()->all(),
         ];
     }
@@ -224,7 +223,7 @@ class SkpiDocumentService
             $items = $groups[$index] ?? [];
             if ($items === []) {
                 $emptyRow = $templateRow->cloneNode(true);
-                $this->fillActivityRow($xpath, $emptyRow, ['', '', '', '', '']);
+                $this->fillActivityRow($xpath, $emptyRow, ['', '', '', '']);
                 $table->appendChild($emptyRow);
 
                 continue;
@@ -237,7 +236,6 @@ class SkpiDocumentService
                     $activity['name'],
                     $activity['organizer'],
                     (string) $activity['year'],
-                    (string) $activity['points'],
                 ]);
                 $table->appendChild($row);
             }
@@ -292,6 +290,17 @@ class SkpiDocumentService
     {
         $textNodes = $xpath->query('.//w:t', $node);
         if ($textNodes->length === 0) {
+            $paragraph = $xpath->query('.//w:p', $node)->item(0);
+            if (! $paragraph) {
+                $paragraph = $node->ownerDocument->createElementNS(self::WORD_NAMESPACE, 'w:p');
+                $node->appendChild($paragraph);
+            }
+            $run = $node->ownerDocument->createElementNS(self::WORD_NAMESPACE, 'w:r');
+            $text = $node->ownerDocument->createElementNS(self::WORD_NAMESPACE, 'w:t');
+            $text->nodeValue = $value;
+            $run->appendChild($text);
+            $paragraph->appendChild($run);
+
             return;
         }
         $textNodes->item(0)->nodeValue = $value;

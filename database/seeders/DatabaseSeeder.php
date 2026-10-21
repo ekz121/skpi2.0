@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\ActivityRule;
+use App\Models\Faculty;
 use App\Models\StudentProfile;
 use App\Models\StudyProgram;
 use App\Models\Submission;
@@ -14,12 +15,16 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $faculty = Faculty::updateOrCreate(
+            ['code' => 'POLTEKSI'],
+            ['name' => 'Politeknik Semen Indonesia'],
+        );
         $programs = collect([
             ['code' => 'TI', 'name' => 'Teknologi Informasi'],
             ['code' => 'TM', 'name' => 'Teknologi Mesin'],
             ['code' => 'AP', 'name' => 'Administrasi Perkantoran'],
             ['code' => 'AK', 'name' => 'Akuntansi'],
-        ])->mapWithKeys(function (array $program) {
+        ])->mapWithKeys(function (array $program) use ($faculty) {
             $outcomes = $program['code'] === 'TI' ? [
                 'Sikap dan Tata Nilai' => [
                     'Bertakwa kepada Tuhan Yang Maha Esa dan menunjukkan sikap religius.',
@@ -49,7 +54,7 @@ class DatabaseSeeder extends Seeder
             };
             $model = StudyProgram::updateOrCreate(
                 ['code' => $program['code']],
-                $program + $metadata + ['learning_outcomes' => $outcomes],
+                $program + $metadata + ['faculty_id' => $faculty->id, 'learning_outcomes' => $outcomes],
             );
 
             return [$program['code'] => $model];
@@ -121,6 +126,16 @@ class DatabaseSeeder extends Seeder
             'activity_type' => 'Keterlibatan 2 minggu sampai 1 bulan', 'duration_label' => '2 minggu - 1 bulan', 'points' => 30,
             'evidence_label' => 'Bukti jurnal/proyek keikutsertaan',
         ];
+        $rules[] = [
+            'category' => 'Sertifikat Magang', 'subcategory' => 'Magang',
+            'activity_type' => 'Magang Industri', 'points' => 60,
+            'evidence_label' => 'Sertifikat magang',
+        ];
+        $rules[] = [
+            'category' => 'Sertifikat Lain-lain', 'subcategory' => 'Lain-lain',
+            'activity_type' => 'Lain-lain', 'points' => 0,
+            'evidence_label' => 'Sertifikat atau dokumen resmi',
+        ];
 
         foreach ($rules as $rule) {
             $values = $rule + ['is_mandatory' => $rule['is_mandatory'] ?? false, 'is_active' => true];
@@ -139,6 +154,7 @@ class DatabaseSeeder extends Seeder
         User::where('email', 'mahasiswa@demo.polteksi.ac.id')->delete();
         User::updateOrCreate(['email' => 'admin@polteksi.ac.id'], [
             'name' => 'Admin SKPI', 'email' => 'admin@polteksi.ac.id', 'role' => 'admin',
+            'faculty_id' => $faculty->id, 'study_program_id' => null, 'is_active' => true,
             'email_verified_at' => now(), 'password' => Hash::make('pastikerja123'),
         ]);
 
@@ -154,6 +170,9 @@ class DatabaseSeeder extends Seeder
                 [
                     'name' => 'Mahasiswa Uji '.$shortName,
                     'role' => 'student',
+                    'faculty_id' => $faculty->id,
+                    'study_program_id' => $program->id,
+                    'is_active' => true,
                     'email_verified_at' => now(),
                     'password' => Hash::make('demo12345'),
                 ],

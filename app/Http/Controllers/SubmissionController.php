@@ -83,8 +83,18 @@ class SubmissionController extends Controller
     private function persist(Request $request, Submission $submission, ?SkpiRequestInvalidator $invalidator = null)
     {
         $isSubmit = true;
+        $selectedRule = ActivityRule::query()
+            ->whereKey($request->input('activity_rule_id'))
+            ->where('is_active', true)
+            ->first();
         $data = $request->validate([
             'activity_rule_id' => ['required', Rule::exists('activity_rules', 'id')->where('is_active', true)],
+            'custom_activity_type' => [
+                Rule::requiredIf(fn () => $selectedRule?->category === Submission::CUSTOM_CATEGORY),
+                'nullable',
+                'string',
+                'max:180',
+            ],
             'activity_name' => ['required', 'string', 'max:180'],
             'organizer' => ['required', 'string', 'max:180'],
             'started_at' => ['required', 'date', 'before_or_equal:today'],
@@ -104,8 +114,11 @@ class SubmissionController extends Controller
             }
         }
 
-        $rule = ActivityRule::findOrFail($data['activity_rule_id']);
+        $rule = $selectedRule ?? ActivityRule::findOrFail($data['activity_rule_id']);
         unset($data['action'], $data['evidence']);
+        if ($rule->category !== Submission::CUSTOM_CATEGORY) {
+            $data['custom_activity_type'] = null;
+        }
         $data['estimated_points'] = $rule->points;
         $data['status'] = 'approved';
         $data['approved_points'] = $rule->points;

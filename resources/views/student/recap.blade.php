@@ -10,7 +10,7 @@
         @if($submissions->isEmpty())
             <div class="empty-state">@include('partials.icon', ['name' => 'chart'])<h3>Belum ada poin</h3><p>Poin akan tampil setelah admin menyetujui pengajuan Anda.</p></div>
         @else
-            <div class="table-wrap"><table><thead><tr><th>Kegiatan</th><th>Kategori</th><th>Tanggal</th><th>Disetujui</th></tr></thead><tbody>@foreach($submissions as $submission)<tr><td><strong>{{ $submission->activity_name }}</strong><small>{{ $submission->organizer }}</small></td><td>{{ $submission->rule->subcategory }}</td><td>{{ $submission->verified_at?->translatedFormat('d M Y') }}</td><td><strong>{{ $submission->approved_points }} poin</strong></td></tr>@endforeach</tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Kegiatan</th><th>Kategori</th><th>Tanggal</th><th>Disetujui</th></tr></thead><tbody>@foreach($submissions as $submission)<tr><td><strong>{{ $submission->activity_name }}</strong><small>{{ $submission->organizer }}</small></td><td>{{ $submission->categoryLabel() }}<small>{{ $submission->activityTypeLabel() }}</small></td><td>{{ $submission->verified_at?->translatedFormat('d M Y') }}</td><td><strong>{{ $submission->pointsLabel() }}</strong></td></tr>@endforeach</tbody></table></div>
         @endif
     </section>
 @endsection

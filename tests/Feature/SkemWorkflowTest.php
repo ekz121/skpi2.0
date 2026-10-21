@@ -18,6 +18,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -82,6 +83,72 @@ class SkemWorkflowTest extends TestCase
         Notification::assertSentTo($user, VerifyEmail::class);
     }
 
+    public function test_registration_and_login_normalize_email_case_and_spacing(): void
+    {
+        Notification::fake();
+        $registry = StudentRegistry::whereNull('user_id')->firstOrFail();
+
+        $this->post(route('register.store'), [
+            'student_registry_id' => $registry->id,
+            'email' => '  MAHASISWA.BARU@EXAMPLE.TEST  ',
+            'password' => 'rahasia123',
+        ])->assertRedirect(route('verification.notice'));
+
+        $user = User::where('email', 'mahasiswa.baru@example.test')->firstOrFail();
+        auth()->logout();
+
+        $this->post(route('login.attempt'), [
+            'email' => '  MAHASISWA.BARU@EXAMPLE.TEST ',
+            'password' => 'rahasia123',
+        ])->assertRedirect(route('student.dashboard'));
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_verification_link_can_continue_after_login_on_another_device(): void
+    {
+        $user = User::where('role', 'student')->firstOrFail();
+        $user->forceFill(['email_verified_at' => null])->save();
+        $verificationUrl = URL::temporarySignedRoute('verification.verify', now()->addMinutes(60), [
+            'id' => $user->id,
+            'hash' => sha1($user->email),
+        ]);
+
+        $this->get($verificationUrl)->assertRedirect(route('login'));
+        $this->post(route('login.attempt'), [
+            'email' => $user->email,
+            'password' => 'demo12345',
+        ])->assertRedirect($verificationUrl);
+        $this->get($verificationUrl)->assertRedirect(route('student.dashboard'));
+
+        $this->assertNotNull($user->fresh()->email_verified_at);
+    }
+
+    public function test_unverified_user_can_correct_email_and_receive_a_new_link(): void
+    {
+        Notification::fake();
+        $user = User::where('role', 'student')->firstOrFail();
+        $user->forceFill(['email_verified_at' => null])->save();
+
+        $this->actingAs($user)->put(route('verification.email.update'), [
+            'email' => '  EMAIL.BENAR@EXAMPLE.TEST ',
+        ])->assertSessionHas('status');
+
+        $this->assertSame('email.benar@example.test', $user->fresh()->email);
+        Notification::assertSentTo($user, VerifyEmail::class);
+    }
+
+    public function test_invalid_verification_link_has_a_clear_message(): void
+    {
+        $user = User::where('role', 'student')->firstOrFail();
+        $user->forceFill(['email_verified_at' => null])->save();
+
+        $this->actingAs($user)->get(route('verification.verify', [
+            'id' => $user->id,
+            'hash' => 'tidak-valid',
+        ]))->assertRedirect(route('verification.notice'))
+            ->assertSessionHasErrors('email');
+    }
+
     public function test_registry_contains_all_77_students_from_the_four_workbooks(): void
     {
         $this->assertSame(77, StudentRegistry::count());
@@ -104,6 +171,38 @@ class SkemWorkflowTest extends TestCase
             'TI' => 'A.Md.Kom.',
             'TM' => 'A.Md.T.',
         ], StudyProgram::orderBy('code')->pluck('academic_title', 'code')->all());
+
+        $this->assertDatabaseHas('student_registries', [
+            'nim' => '23016002',
+            'name' => 'MUHAMMAD FAIZUN ABDHILLAH',
+            'diploma_number' => '075021214012026100025',
+        ]);
+        $this->assertDatabaseHas('student_registries', [
+            'nim' => '23036020',
+            'name' => 'FADHILATUL MUKMINAH',
+            'diploma_number' => '075021624012026100014',
+        ]);
+    }
+
+    public function test_registration_search_keeps_names_that_already_have_an_account_visible(): void
+    {
+        $registry = StudentRegistry::where('nim', '23016002')->firstOrFail();
+        $user = User::where('role', 'student')->firstOrFail();
+        $registry->update(['user_id' => $user->id]);
+
+        $this->get(route('register'))
+            ->assertOk()
+            ->assertSee('MUHAMMAD FAIZUN ABDHILLAH')
+            ->assertSee('data-available="false"', false)
+            ->assertSee('Sudah memiliki akun');
+
+        $this->post(route('register.store'), [
+            'student_registry_id' => $registry->id,
+            'email' => 'duplikat@example.test',
+            'password' => 'rahasia123',
+        ])->assertSessionHasErrors([
+            'student_registry_id' => 'Nama mahasiswa ini sudah memiliki akun atau tidak tersedia. Silakan masuk atau gunakan lupa password.',
+        ]);
     }
 
     public function test_registration_only_asks_for_registry_email_and_password(): void
@@ -113,7 +212,7 @@ class SkemWorkflowTest extends TestCase
         $response->assertOk()
             ->assertSee('name="student_registry_id"', false)
             ->assertSee('data-student-search', false)
-            ->assertSee('Huruf besar dan kecil menghasilkan pencarian yang sama')
+            ->assertSee('Pencarian tidak membedakan huruf besar dan kecil')
             ->assertSee('name="email"', false)
             ->assertSee('name="password"', false)
             ->assertDontSee('name="nim"', false)
@@ -351,6 +450,20 @@ class SkemWorkflowTest extends TestCase
         $this->assertStringContainsString('Gresik, '.now()->locale('id')->translatedFormat('d F Y'), $documentXml);
         $this->assertStringContainsString('Pejabat Penguji', $documentXml);
         $this->assertStringContainsString('NIDN. 0000000000', $documentXml);
+        $this->assertStringNotContainsString('Bobot Nilai', $documentXml);
+        $document = new \DOMDocument;
+        $this->assertTrue($document->loadXML($documentXml));
+        $xpath = new \DOMXPath($document);
+        $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+        $activityTableCount = 0;
+        foreach ($xpath->query('//w:tbl') as $table) {
+            $headerRow = $xpath->query('./w:tr[1]', $table)->item(0);
+            if ($headerRow && str_contains(preg_replace('/\s+/', ' ', $headerRow->textContent), 'Nama Kegiatan')) {
+                $activityTableCount++;
+                $this->assertCount(4, $xpath->query('./w:tc', $headerRow));
+            }
+        }
+        $this->assertSame(3, $activityTableCount);
         $this->assertStringNotContainsString('Gresik, …………………………', $documentXml);
         Notification::assertSentTo($student, SkpiStatusNotification::class);
     }
@@ -498,6 +611,68 @@ class SkemWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_student_can_upload_internship_and_custom_certificate_types(): void
+    {
+        Storage::fake('local');
+        $student = User::where('email', 'demo01@demo.polteksi.ac.id')->firstOrFail();
+        $internshipRule = ActivityRule::where('category', 'Sertifikat Magang')->firstOrFail();
+        $customRule = ActivityRule::where('category', Submission::CUSTOM_CATEGORY)->firstOrFail();
+
+        $this->actingAs($student)->get(route('student.submissions.create'))
+            ->assertOk()
+            ->assertSee('Sertifikat Magang')
+            ->assertSee('Sertifikat Lain-lain')
+            ->assertSee('Magang Industri');
+
+        $this->post(route('student.submissions.store'), [
+            'activity_rule_id' => $internshipRule->id,
+            'activity_name' => 'Praktik kerja industri',
+            'organizer' => 'PT Industri Uji',
+            'started_at' => '2026-01-05',
+            'ended_at' => '2026-03-05',
+            'evidence' => UploadedFile::fake()->create('magang.pdf', 100, 'application/pdf'),
+            'action' => 'submit',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('submissions', [
+            'user_id' => $student->id,
+            'activity_rule_id' => $internshipRule->id,
+            'activity_name' => 'Praktik kerja industri',
+            'estimated_points' => 60,
+        ]);
+
+        $this->post(route('student.submissions.store'), [
+            'activity_rule_id' => $customRule->id,
+            'activity_name' => 'Kegiatan khusus mahasiswa',
+            'organizer' => 'Penyelenggara Uji',
+            'started_at' => '2026-04-01',
+            'ended_at' => '2026-04-02',
+            'evidence' => UploadedFile::fake()->create('lain.pdf', 100, 'application/pdf'),
+            'action' => 'submit',
+        ])->assertSessionHasErrors([
+            'custom_activity_type' => 'Jenis kegiatan lainnya wajib diisi.',
+        ]);
+
+        $this->post(route('student.submissions.store'), [
+            'activity_rule_id' => $customRule->id,
+            'custom_activity_type' => 'Pelatihan Keselamatan Laboratorium',
+            'activity_name' => 'Kegiatan khusus mahasiswa',
+            'organizer' => 'Penyelenggara Uji',
+            'started_at' => '2026-04-01',
+            'ended_at' => '2026-04-02',
+            'evidence' => UploadedFile::fake()->create('lain.pdf', 100, 'application/pdf'),
+            'action' => 'submit',
+        ])->assertSessionHasNoErrors();
+
+        $customSubmission = Submission::where('user_id', $student->id)
+            ->where('activity_rule_id', $customRule->id)
+            ->latest('id')->firstOrFail();
+        $this->assertSame('Pelatihan Keselamatan Laboratorium', $customSubmission->custom_activity_type);
+        $this->assertSame('-', $customSubmission->pointsLabel());
+        $this->get(route('student.submissions.show', $customSubmission))
+            ->assertOk()
+            ->assertSee('Pelatihan Keselamatan Laboratorium');
+    }
+
     public function test_only_admin_can_withdraw_an_issued_skpi_and_student_can_reapply(): void
     {
         Storage::fake('local');
@@ -557,6 +732,38 @@ class SkemWorkflowTest extends TestCase
         $this->assertNotSame($old->document_number, $new->fresh()->document_number);
     }
 
+    public function test_student_can_request_a_new_skpi_while_previous_document_remains_issued(): void
+    {
+        Storage::fake('local');
+        $student = User::where('email', 'demo01@demo.polteksi.ac.id')->firstOrFail();
+        $old = SkpiRequest::create([
+            'user_id' => $student->id,
+            'status' => 'issued',
+            'document_number' => 'SKPI/POLTEKSI/2026/LAMA01',
+            'docx_path' => 'skpi/'.$student->id.'/lama.docx',
+            'issued_at' => now()->subDay(),
+        ]);
+        Storage::disk('local')->put($old->docx_path, 'dokumen lama');
+
+        $this->actingAs($student)->post(route('student.skpi.request'), [
+            'birthplace' => 'Surabaya',
+            'birthdate' => '2004-01-01',
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+        $this->assertSame('issued', $old->fresh()->status);
+        $this->assertSame(1, $student->skpiRequests()->where('status', 'pending')->count());
+        $this->get(route('student.skpi'))
+            ->assertOk()
+            ->assertSee('Dokumen terbit sebelumnya')
+            ->assertSee('SKPI/POLTEKSI/2026/LAMA01');
+
+        $this->post(route('student.skpi.request'), [
+            'birthplace' => 'Surabaya',
+            'birthdate' => '2004-01-01',
+        ])->assertSessionHasErrors(['skpi' => 'Anda sudah memiliki pengajuan SKPI aktif.']);
+        $this->assertSame(1, $student->skpiRequests()->where('status', 'pending')->count());
+    }
+
     public function test_application_uses_surabaya_time_and_word_only_schema(): void
     {
         $this->assertSame('Asia/Jakarta', config('app.timezone'));
@@ -564,44 +771,31 @@ class SkemWorkflowTest extends TestCase
         $this->assertTrue(Schema::hasColumn('skpi_requests', 'docx_path'));
     }
 
-    public function test_admin_can_create_view_update_and_delete_a_student_account(): void
+    public function test_admin_can_view_and_update_a_student_account_without_add_feature(): void
     {
-        Storage::fake('local');
         $admin = User::where('role', 'admin')->firstOrFail();
-        $registry = StudentRegistry::whereNull('user_id')->with('studyProgram')->firstOrFail();
-
-        $this->actingAs($admin)->post(route('admin.students.store'), [
-            'student_registry_id' => $registry->id,
-            'email' => 'kelola.mahasiswa@example.test',
-            'password' => 'aman12345',
-        ])->assertSessionHasNoErrors();
-
-        $student = User::where('email', 'kelola.mahasiswa@example.test')->firstOrFail();
-        $this->assertNotNull($student->email_verified_at);
-        $this->get(route('admin.students.show', $student))->assertOk()->assertSee($registry->nim);
+        $student = User::where('email', 'demo01@demo.polteksi.ac.id')->with('profile.studyProgram', 'registry')->firstOrFail();
+        $this->actingAs($admin)->get('/admin/mahasiswa/baru')->assertNotFound();
+        $this->get(route('admin.students'))->assertOk()->assertDontSee('Tambah mahasiswa');
+        $this->get(route('admin.students.show', $student))->assertOk()->assertSee($student->profile->nim);
 
         $this->put(route('admin.students.update', $student), [
             'name' => 'Nama Mahasiswa Diperbarui',
-            'email' => 'kelola.baru@example.test',
-            'nim' => $registry->nim,
-            'study_program_id' => $registry->study_program_id,
+            'email' => $student->email,
+            'nim' => $student->profile->nim,
+            'study_program_id' => $student->profile->study_program_id,
             'cohort' => 2023,
             'birthplace' => 'Surabaya',
             'birthdate' => '2004-05-06',
             'graduation_year' => 2026,
-            'diploma_number' => $registry->diploma_number,
-            'academic_title' => $registry->studyProgram->academic_title,
+            'diploma_number' => $student->profile->diploma_number,
+            'academic_title' => $student->profile->studyProgram->academic_title,
             'email_verified' => '1',
         ])->assertSessionHasNoErrors();
 
-        $student->refresh()->load('profile', 'registry');
+        $student->refresh()->load('profile');
         $this->assertSame('Nama Mahasiswa Diperbarui', $student->name);
         $this->assertSame('Surabaya', $student->profile->birthplace);
-        $this->assertSame('Nama Mahasiswa Diperbarui', $student->registry->name);
-
-        $this->delete(route('admin.students.destroy', $student))->assertRedirect(route('admin.students'));
-        $this->assertDatabaseMissing('users', ['id' => $student->id]);
-        $this->assertNull($registry->fresh()->user_id);
     }
 
     public function test_student_cannot_access_admin_student_management(): void
@@ -636,7 +830,7 @@ class SkemWorkflowTest extends TestCase
         foreach ([
             route('admin.dashboard'), route('admin.submissions.index'), route('admin.submissions.show', $submission),
             route('admin.submissions.create'), route('admin.submissions.edit', $submission),
-            route('admin.students'), route('admin.students.create'), route('admin.students.show', $submission->user),
+            route('admin.students'), route('admin.students.show', $submission->user),
             route('admin.students.edit', $submission->user), route('admin.skpi.index'),
         ] as $url) {
             $this->get($url)->assertOk();

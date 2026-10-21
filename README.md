@@ -43,7 +43,7 @@ Sembilan akun uji memakai password `demo12345`:
 ## Alur utama
 
 - Registrasi memilih nama dari 77 data sumber. NIM, prodi, angkatan 2023, tahun lulus 2026, nomor ijazah, dan gelar terisi otomatis.
-- Sertifikat langsung aktif setelah diunggah. Mahasiswa dan admin dapat melihat, mengubah, dan menghapus sertifikat.
+- Sertifikat langsung aktif setelah diunggah. Pilihan mencakup kategori pedoman, Magang Industri, dan Lain-lain dengan jenis kegiatan yang diisi sendiri. Mahasiswa dan admin dapat melihat, mengubah, dan menghapus sertifikat.
 - Satu sertifikat cukup untuk mengajukan SKPI. Mahasiswa hanya menambahkan tempat dan tanggal lahir.
 - Admin dapat mencari permintaan, menerbitkan atau menolak satu maupun banyak permintaan, dan mengunduh ZIP berisi Word.
 - Jika sertifikat yang mendasari SKPI diubah atau dihapus, dokumen lama dibatalkan agar mahasiswa dapat mengunggah dan mengajukan ulang.
@@ -59,7 +59,7 @@ Panduan lengkap:
 
 ## Pengujian
 
-Jalankan `php artisan test`. Pengujian meliputi registrasi terkontrol, 77 data sumber, role, unggahan otomatis, CRUD sertifikat, pencarian, pengajuan ulang, keputusan massal, Word, dan isolasi data.
+Jalankan `php artisan test`. Pengujian meliputi registrasi terkontrol, 77 data sumber, empat role, pengelolaan user terdaftar, reset password, pengamanan penghapusan, unggahan otomatis, CRUD sertifikat, pencarian, pengajuan ulang, keputusan massal, Word, dan isolasi data.
 
 <details>
 <summary>Catatan framework Laravel</summary>

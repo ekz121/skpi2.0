@@ -73,7 +73,7 @@ database-import/
 PANDUAN-HOSTINGER.md
 ```
 
-Folder `public_html` hanya berisi file yang boleh diakses browser. Folder `skpi_app` menyimpan kode, `.env`, vendor, template Word, dan storage.
+Folder `public_html` hanya berisi file yang boleh diakses browser. Folder `skpi_app` menyimpan kode, vendor, template Word, dan storage. Paket menyertakan `.env.hostinger.example`, bukan `.env`, supaya pembaruan tidak dapat menimpa kunci dan kredensial produksi.
 
 ## A. Deploy melalui hPanel tanpa SSH
 
@@ -168,6 +168,8 @@ Jangan menambahkan pengalihan ke folder `/public`, karena document root sudah be
 
 ### A.6 Atur `.env` produksi
 
+Untuk instalasi pertama, ubah nama `skpi_app/.env.hostinger.example` menjadi `skpi_app/.env`, lalu isi semua nilai `GANTI_...`. Untuk situs yang sudah aktif, pertahankan `.env` lama dan jangan menggantinya dengan file contoh.
+
 Edit `skpi_app/.env`:
 
 ```dotenv
@@ -213,7 +215,7 @@ SKPI_INSTITUTION_ACCREDITATION=""
 
 Catatan penting:
 
-- Paket deploy membuat `APP_KEY` acak. Jangan mengganti `APP_KEY` pada pembaruan karena sesi dan data terenkripsi lama dapat menjadi tidak terbaca.
+- File `.env.hostinger.example` pada paket pertama memiliki `APP_KEY` acak. Setelah `.env` produksi dibuat, jangan pernah mengganti `APP_KEY` saat pembaruan karena sesi, tautan verifikasi bertanda tangan, dan data terenkripsi lama dapat menjadi tidak berlaku.
 - Jangan memakai `APP_DEBUG=true` pada produksi.
 - Jika hPanel menampilkan host MySQL selain `localhost`, gunakan nilai dari menu Databases.
 - Nilai nama dan NIDN pejabat harus diisi agar Word dapat diterbitkan.
@@ -230,7 +232,7 @@ Pilih satu kondisi berikut.
 4. Pilih `database-import/skpi-hostinger.sql` dari hasil ekstrak, atau file lokal `database/skpi-hostinger.sql`.
 5. Gunakan format SQL dan character set UTF-8.
 6. Jalankan impor.
-7. Pastikan terdapat tabel `users`, `student_registries`, `submissions`, `skpi_requests`, `skpi_withdrawals`, `sessions`, dan tabel lainnya.
+7. Pastikan terdapat tabel `users`, `faculties`, `student_registries`, `submissions`, `skpi_requests`, `skpi_withdrawals`, `sessions`, dan tabel lainnya.
 
 File penuh berisi struktur tabel, 77 data registrasi mahasiswa, aturan kegiatan, akun admin, dan akun demo. File ini mengandung `DROP TABLE`, jadi hanya untuk instalasi baru atau pemulihan penuh yang memang disengaja.
 
@@ -238,12 +240,18 @@ File penuh berisi struktur tabel, 77 data registrasi mahasiswa, aturan kegiatan,
 
 1. Buat export database sebelum perubahan.
 2. Upload kode baru tanpa menimpa `.env` dan `storage/app/private`.
-3. Di phpMyAdmin, impor `database/update-2026-10-14.sql` satu kali.
-4. Pastikan tabel `skpi_withdrawals` muncul.
-5. Pastikan kolom `skpi_requests.status` menerima nilai `withdrawn`.
-6. Jangan mengimpor SQL penuh ke database aktif.
+3. Jika pembaruan penarikan SKPI belum pernah diterapkan, impor `database/update-2026-10-14.sql` satu kali.
+4. Setelah itu impor `database/update-2026-10-15.sql` satu kali untuk fitur manajemen user.
+5. Impor `database/update-2026-10-19.sql` satu kali untuk menambah Sertifikat Magang, Sertifikat Lain-lain, dan kolom jenis kegiatan bebas.
+6. Impor `database/update-2026-10-21.sql` satu kali untuk menautkan akun mahasiswa lama ke daftar akademik berdasarkan NIM. Pembaruan ini tidak menghapus data.
+7. Pastikan tabel `skpi_withdrawals` dan `faculties` muncul.
+8. Pastikan `users` memiliki kolom `faculty_id`, `study_program_id`, `is_active`, `deactivated_at`, dan `deactivated_by`.
+9. Pastikan `submissions` memiliki kolom `custom_activity_type`.
+10. Buka menu **Data Mahasiswa**. Angka daftar akademik harus 77; angka sudah mendaftar mengikuti akun produksi yang benar-benar telah dibuat.
+11. Buka **Manajemen User** dan uji pencarian, reset password, serta aktivasi akun.
+12. Jangan mengimpor SQL penuh ke database aktif.
 
-File pembaruan dibuat aman untuk diperiksa ulang: tabel memakai `IF NOT EXISTS` dan catatan migrasi tidak ditambahkan dua kali. Tetap lakukan backup sebelum setiap impor.
+File pembaruan harus diimpor satu kali dan secara berurutan. File 15 Oktober menambah kolom dengan `ALTER TABLE`, sehingga impor ulang akan menghasilkan pesan kolom sudah ada. Tetap lakukan backup sebelum setiap impor.
 
 Jika pembaruan berikutnya menyediakan file `database/update-YYYY-MM-DD.sql`, impor file secara urut berdasarkan tanggal.
 
@@ -272,7 +280,12 @@ Proyek menyimpan bukti secara privat dan mengunduhnya melalui controller yang me
 3. Untuk Hostinger SMTP dengan SSL, gunakan port 465 dan `MAIL_SCHEME=smtps`.
 4. Jika penyedia memakai STARTTLS, biasanya gunakan port 587 dan sesuaikan skema berdasarkan petunjuk penyedia.
 5. Daftar satu akun uji dengan email yang dapat diakses.
-6. Pastikan email verifikasi masuk dan tautannya membuka domain HTTPS yang benar.
+6. Masuk sebagai admin dan tekan **Kirim email uji ke admin** pada Dashboard.
+7. Jika server SMTP menerima email tetapi kotak masuk belum menerimanya, periksa folder spam serta konfigurasi SPF, DKIM, dan DMARC domain pada penyedia DNS/email.
+8. Daftar satu mahasiswa uji, buka tautan verifikasi dari perangkat lain, masuk dengan akun yang sama, lalu pastikan proses kembali ke tautan dan email menjadi terverifikasi.
+9. Pastikan semua tautan email memakai `https://skpi.polteksi.ac.id`.
+
+Pengiriman dari aplikasi sampai server SMTP dapat diuji, tetapi tidak ada aplikasi yang dapat menjamin email selalu masuk ke inbox karena keputusan akhir juga ditentukan penyedia email penerima dan reputasi/domain pengirim.
 
 ### A.10 Domain dan SSL
 
@@ -421,6 +434,10 @@ Versi saat ini tidak mempunyai jadwal, jadi cron tersebut belum wajib.
 8. Uji login, upload, penerbitan, penarikan, dan unduhan.
 9. Hapus folder sementara setelah situs dinyatakan normal.
 
+Untuk pembaruan versi 19 Oktober 2026 pada situs yang sudah aktif, urutannya adalah: backup, upload paket baru, pertahankan `.env` dan `storage/app/private`, impor `database-import/update-2026-10-19.sql` satu kali melalui phpMyAdmin, lalu ganti isi `public_html`. Data mahasiswa, sertifikat lama, akun, dan dokumen yang sudah terbit tidak dihapus.
+
+Untuk pembaruan perbaikan akun dan verifikasi tanggal 21 Oktober 2026, upload kode baru dengan tetap mempertahankan `.env` dan seluruh folder `storage/app/private`, lalu impor `database-import/update-2026-10-21.sql` satu kali. Ganti isi `public_html` dan bersihkan cache sesuai bagian A.11. Semua 77 nama tetap ditampilkan dalam pencarian. Menu **Data Mahasiswa** menampilkan daftar akademik, status pendaftaran, verifikasi email, dan akun lama yang belum tertaut. Nama yang sudah terhubung ke akun diberi keterangan **Sudah memiliki akun** dan tidak boleh didaftarkan dua kali.
+
 ### 3.2 Update dengan Git dan SSH
 
 ```bash
@@ -482,7 +499,19 @@ Periksa kredensial di hPanel dan `.env`. Nama database serta user Hostinger bias
 
 ### Email verifikasi tidak terkirim
 
-Periksa SMTP, port, skema, alamat pengirim, dan password mailbox. Lihat `laravel.log`. Pastikan alamat FROM diizinkan oleh penyedia SMTP.
+1. Pastikan `.env` produksi lama tidak tertimpa dan `APP_KEY` tidak berubah.
+2. Periksa SMTP, port, skema, alamat pengirim, dan password mailbox.
+3. Bersihkan file cache konfigurasi di `bootstrap/cache` setelah mengubah `.env`.
+4. Masuk sebagai admin dan gunakan tombol **Kirim email uji ke admin** pada Dashboard.
+5. Lihat `storage/logs/laravel.log` jika pengiriman ditolak.
+6. Pastikan alamat FROM sama dengan mailbox yang diizinkan penyedia SMTP.
+7. Periksa SPF, DKIM, DMARC, kotak spam, dan reputasi domain jika SMTP menerima email tetapi inbox belum menerimanya.
+
+Jika mahasiswa salah mengetik email, buka halaman verifikasi dan gunakan **Alamat email salah?** untuk mengganti alamat lalu mengirim tautan baru.
+
+### Jumlah mahasiswa di admin berbeda dengan phpMyAdmin
+
+Menu **Data Mahasiswa** membedakan empat angka: seluruh daftar akademik, daftar yang sudah mendaftar, yang belum mendaftar, dan seluruh akun mahasiswa. Perbedaan dapat terjadi karena akun demo atau akun lama tidak memiliki pasangan di daftar akademik. Impor `database-import/update-2026-10-21.sql` untuk menautkan pasangan yang NIM-nya sama tanpa menghapus data. Akun yang tetap tidak memiliki pasangan akan ditampilkan pada bagian **Akun belum tertaut ke daftar akademik**, bukan disembunyikan.
 
 ### Upload sertifikat gagal
 
@@ -513,7 +542,9 @@ Pastikan kode baru dan `database/update-2026-10-14.sql` sudah diterapkan. Status
 - [ ] Database `u841207907_skpi` dapat diakses.
 - [ ] Tabel `skpi_withdrawals` tersedia.
 - [ ] Login admin berhasil.
-- [ ] Admin dapat mencari, melihat, menambah, mengubah, dan menghapus akun mahasiswa.
+- [ ] Menu Data Mahasiswa menampilkan 77 data akademik dan status akun masing-masing.
+- [ ] Akun mahasiswa lama yang belum tertaut tetap terlihat oleh admin.
+- [ ] Admin dapat mencari, melihat, mengubah, menonaktifkan, mereset password, dan menghapus akun sesuai aturan relasi data.
 - [ ] Registrasi mahasiswa dan pencarian nama berhasil pada desktop dan ponsel.
 - [ ] Tombol tampilkan kata sandi berfungsi pada login, registrasi, dan reset kata sandi.
 - [ ] Pesan validasi tampil dalam bahasa Indonesia.
@@ -526,7 +557,8 @@ Pastikan kode baru dan `database/update-2026-10-14.sql` sudah diterapkan. Status
 - [ ] Mahasiswa menerima alasan penarikan dan dapat mengajukan lagi.
 - [ ] Pengajuan baru mendapat nomor dokumen baru.
 - [ ] ZIP Word massal admin berhasil.
-- [ ] Email verifikasi terkirim melalui SMTP.
+- [ ] Tombol email uji admin berhasil dan email diterima.
+- [ ] Email verifikasi terkirim melalui SMTP, termasuk saat tautan dibuka dari perangkat lain.
 - [ ] Backup database, `.env`, template Word, bukti, dan dokumen sudah dibuat.
 
 ## Referensi resmi

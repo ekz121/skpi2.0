@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\SystemTestMail;
 use App\Models\ActivityRule;
 use App\Models\AppNotification;
 use App\Models\SkpiRequest;
@@ -10,6 +11,7 @@ use App\Models\StudyProgram;
 use App\Models\Submission;
 use App\Models\User;
 use App\Notifications\SkpiStatusNotification;
+use App\Services\MailConfiguration;
 use App\Services\SkpiDocumentService;
 use App\Services\SkpiRequestInvalidator;
 use Illuminate\Http\Request;
@@ -17,16 +19,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 use ZipArchive;
 
 class AdminController extends Controller
 {
-    public function dashboard()
+    public function dashboard(MailConfiguration $mailConfiguration)
     {
         return view('admin.dashboard', [
             'pendingCount' => SkpiRequest::where('status', 'pending')->count(),
@@ -35,7 +39,32 @@ class AdminController extends Controller
             'checkedCertificateCount' => Submission::whereNotNull('admin_checked_at')->count(),
             'recentRequests' => SkpiRequest::with('user.profile.studyProgram')->where('status', 'pending')->oldest()->limit(8)->get(),
             'recentCertificates' => Submission::with('user.profile.studyProgram', 'rule')->whereNull('admin_checked_at')->latest('submitted_at')->limit(8)->get(),
+            'mailReady' => $mailConfiguration->isReady(),
+            'mailMissing' => $mailConfiguration->missing(),
         ]);
+    }
+
+    public function sendTestEmail(Request $request, MailConfiguration $mailConfiguration)
+    {
+        if (! $mailConfiguration->isReady()) {
+            return back()->withErrors([
+                'email' => 'SMTP belum lengkap. Periksa '.implode(', ', $mailConfiguration->missing()).' pada file .env.',
+            ]);
+        }
+
+        try {
+            Mail::to($request->user()->email)->send(
+                new SystemTestMail(now()->translatedFormat('d F Y H:i:s'))
+            );
+        } catch (Throwable $exception) {
+            Log::error('Email uji admin gagal dikirim.', ['exception' => $exception]);
+
+            return back()->withErrors([
+                'email' => 'Server SMTP menolak pengiriman. Periksa akun email, password, host, port, dan enkripsi pada .env.',
+            ]);
+        }
+
+        return back()->with('success', 'Email uji diterima oleh server SMTP dan dikirim ke '.$request->user()->email.'. Periksa kotak masuk dan folder spam.');
     }
 
     public function submissions(Request $request)
@@ -50,6 +79,7 @@ class AdminController extends Controller
             $term = '%'.(string) $request->string('q').'%';
             $query->where(function ($builder) use ($term) {
                 $builder->where('activity_name', 'like', $term)
+                    ->orWhere('custom_activity_type', 'like', $term)
                     ->orWhere('certificate_number', 'like', $term)
                     ->orWhereHas('user', fn ($user) => $user->where('name', 'like', $term)
                         ->orWhereHas('profile', fn ($profile) => $profile->where('nim', 'like', $term)));
@@ -131,9 +161,19 @@ class AdminController extends Controller
 
     private function persistSubmission(Request $request, Submission $submission, ?SkpiRequestInvalidator $invalidator = null)
     {
+        $selectedRule = ActivityRule::query()
+            ->whereKey($request->input('activity_rule_id'))
+            ->where('is_active', true)
+            ->first();
         $data = $request->validate([
             'user_id' => ['required', Rule::exists('users', 'id')->where('role', 'student')],
             'activity_rule_id' => ['required', Rule::exists('activity_rules', 'id')->where('is_active', true)],
+            'custom_activity_type' => [
+                Rule::requiredIf(fn () => $selectedRule?->category === Submission::CUSTOM_CATEGORY),
+                'nullable',
+                'string',
+                'max:180',
+            ],
             'activity_name' => ['required', 'string', 'max:180'],
             'organizer' => ['required', 'string', 'max:180'],
             'started_at' => ['required', 'date', 'before_or_equal:today'],
@@ -153,9 +193,12 @@ class AdminController extends Controller
             }
         }
 
-        $rule = ActivityRule::findOrFail($data['activity_rule_id']);
+        $rule = $selectedRule ?? ActivityRule::findOrFail($data['activity_rule_id']);
         $oldEvidence = $submission->evidence_path;
         unset($data['evidence']);
+        if ($rule->category !== Submission::CUSTOM_CATEGORY) {
+            $data['custom_activity_type'] = null;
+        }
         $data['status'] = 'approved';
         $data['estimated_points'] = $rule->points;
         $data['approved_points'] = $rule->points;
@@ -193,71 +236,38 @@ class AdminController extends Controller
 
     public function students(Request $request)
     {
-        $students = User::where('role', 'student')
-            ->with('profile.studyProgram')
-            ->withCount(['submissions as approved_submissions_count' => fn ($query) => $query->where('status', 'approved')])
-            ->withSum(['submissions as approved_points' => fn ($query) => $query->where('status', 'approved')], 'approved_points')
+        $students = StudentRegistry::query()
+            ->with('studyProgram')
+            ->with(['user' => fn ($query) => $query
+                ->with('profile')
+                ->withCount(['submissions as approved_submissions_count' => fn ($submission) => $submission->where('status', 'approved')])
+                ->withSum(['submissions as approved_points' => fn ($submission) => $submission->where('status', 'approved')], 'approved_points')])
             ->when($request->filled('q'), function ($query) use ($request) {
                 $term = '%'.(string) $request->string('q').'%';
                 $query->where(function ($search) use ($term) {
                     $search->where('name', 'like', $term)
-                        ->orWhere('email', 'like', $term)
-                        ->orWhereHas('profile', fn ($profile) => $profile
-                            ->where('nim', 'like', $term)
-                            ->orWhereHas('studyProgram', fn ($program) => $program->where('name', 'like', $term)));
+                        ->orWhere('nim', 'like', $term)
+                        ->orWhereHas('studyProgram', fn ($program) => $program->where('name', 'like', $term))
+                        ->orWhereHas('user', fn ($user) => $user->where('email', 'like', $term));
                 });
             })
-            ->orderBy('name')->paginate(15)->withQueryString();
+            ->orderBy('name')->paginate(25)->withQueryString();
 
-        return view('admin.students', compact('students'));
-    }
+        $orphanStudents = User::query()
+            ->where('role', 'student')
+            ->whereDoesntHave('registry')
+            ->with('profile.studyProgram')
+            ->orderBy('name')
+            ->get();
 
-    public function createStudent()
-    {
-        return view('admin.students.form', [
-            'student' => new User,
-            'registries' => StudentRegistry::with('studyProgram')->whereNull('user_id')->orderBy('name')->get(),
-            'programs' => StudyProgram::orderBy('name')->get(),
+        return view('admin.students', [
+            'students' => $students,
+            'orphanStudents' => $orphanStudents,
+            'registryCount' => StudentRegistry::count(),
+            'registeredCount' => StudentRegistry::whereNotNull('user_id')->count(),
+            'unregisteredCount' => StudentRegistry::whereNull('user_id')->count(),
+            'accountCount' => User::where('role', 'student')->count(),
         ]);
-    }
-
-    public function storeStudent(Request $request)
-    {
-        $data = $request->validate([
-            'student_registry_id' => ['required', Rule::exists('student_registries', 'id')->whereNull('user_id')],
-            'email' => ['required', 'email', 'max:190', 'unique:users,email'],
-            'password' => ['required', PasswordRule::min(8)->letters()->numbers()],
-        ]);
-
-        $student = DB::transaction(function () use ($data) {
-            $registry = StudentRegistry::with('studyProgram')
-                ->whereKey($data['student_registry_id'])
-                ->whereNull('user_id')
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $student = User::create([
-                'name' => $registry->name,
-                'email' => $data['email'],
-                'password' => $data['password'],
-                'role' => 'student',
-            ]);
-            $student->markEmailAsVerified();
-            $student->profile()->create([
-                'study_program_id' => $registry->study_program_id,
-                'nim' => $registry->nim,
-                'cohort' => $registry->cohort,
-                'graduation_year' => $registry->graduation_year,
-                'diploma_number' => $registry->diploma_number,
-                'academic_title' => $registry->studyProgram->academic_title,
-            ]);
-            $registry->update(['user_id' => $student->id]);
-
-            return $student;
-        });
-
-        return redirect()->route('admin.students.show', $student)
-            ->with('success', 'Akun mahasiswa berhasil dibuat dan email langsung ditandai terverifikasi.');
     }
 
     public function showStudent(User $student)
@@ -279,7 +289,6 @@ class AdminController extends Controller
 
         return view('admin.students.form', [
             'student' => $student->load('profile.studyProgram', 'registry'),
-            'registries' => collect(),
             'programs' => StudyProgram::orderBy('name')->get(),
         ]);
     }
@@ -304,9 +313,12 @@ class AdminController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $student, $data) {
+            $program = StudyProgram::findOrFail($data['study_program_id']);
             $userData = [
                 'name' => $data['name'],
                 'email' => $data['email'],
+                'faculty_id' => $program->faculty_id,
+                'study_program_id' => $program->id,
                 'email_verified_at' => $request->boolean('email_verified') ? ($student->email_verified_at ?: now()) : null,
             ];
             if (filled($data['password'] ?? null)) {
@@ -343,17 +355,24 @@ class AdminController extends Controller
     public function destroyStudent(User $student)
     {
         $this->ensureStudent($student);
-        $student->load('submissions', 'skpiRequests');
-        $evidencePaths = $student->submissions->pluck('evidence_path')->filter()->all();
-        $documentPaths = $student->skpiRequests->pluck('docx_path')->filter()->all();
+        if ($student->hasRelatedAcademicData()) {
+            $student->update([
+                'is_active' => false,
+                'deactivated_at' => now(),
+                'deactivated_by' => auth()->id(),
+            ]);
 
-        DB::transaction(fn () => $student->delete());
-        foreach (array_unique([...$evidencePaths, ...$documentPaths]) as $path) {
-            Storage::disk('local')->delete($path);
+            return redirect()->route('admin.users.show', $student)
+                ->with('warning', 'Akun memiliki data terkait sehingga tidak dihapus permanen. Akun sudah dinonaktifkan.');
         }
 
+        DB::transaction(function () use ($student) {
+            $student->registry?->update(['user_id' => null]);
+            $student->delete();
+        });
+
         return redirect()->route('admin.students')
-            ->with('success', 'Akun mahasiswa beserta data transaksinya berhasil dihapus. Data induk tetap tersedia untuk pendaftaran ulang.');
+            ->with('success', 'Akun mahasiswa tanpa data terkait berhasil dihapus permanen.');
     }
 
     private function ensureStudent(User $student): void
@@ -409,7 +428,7 @@ class AdminController extends Controller
             $this->issueSkpi($skpiRequest, $request->user(), $documents);
         } catch (ValidationException $exception) {
             return back()->withErrors($exception->errors());
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             Log::error('SKPI generation failed', ['request_id' => $skpiRequest->id, 'error' => $exception->getMessage()]);
             $skpiRequest->update(['status' => 'failed', 'admin_note' => null]);
 
@@ -477,7 +496,7 @@ class AdminController extends Controller
                     $this->rejectSkpi($item, $request->user());
                 }
                 $processed++;
-            } catch (\Throwable $exception) {
+            } catch (Throwable $exception) {
                 Log::warning('Bulk SKPI action failed', ['request_id' => $item->id, 'error' => $exception->getMessage()]);
                 $failed[] = $item->user->name;
             }
@@ -537,7 +556,7 @@ class AdminController extends Controller
         try {
             $skpiRequest->refresh();
             $user->notify(new SkpiStatusNotification($skpiRequest, 'Dokumen Word telah tersedia di akun Anda.'));
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             Log::warning('SKPI issued email could not be sent', ['request_id' => $skpiRequest->id, 'error' => $exception->getMessage()]);
         }
     }
@@ -558,7 +577,7 @@ class AdminController extends Controller
         try {
             $skpiRequest->refresh();
             $skpiRequest->user->notify(new SkpiStatusNotification($skpiRequest, 'Permintaan SKPI belum dapat diterbitkan. Periksa kembali data profil dan sertifikat Anda.'));
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             Log::warning('SKPI rejection email could not be sent', ['request_id' => $skpiRequest->id, 'error' => $exception->getMessage()]);
         }
     }

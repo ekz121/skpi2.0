@@ -28,7 +28,7 @@ class StudentController extends Controller
             'counts' => $counts,
             'categoryPoints' => $categoryPoints,
             'recentSubmissions' => $user->submissions()->with('rule')->latest()->limit(5)->get(),
-            'skpi' => $user->skpiRequests()->latest()->first(),
+            'skpi' => $user->skpiRequests()->latest('id')->first(),
         ]);
     }
 
@@ -75,7 +75,8 @@ class StudentController extends Controller
         return view('student.skpi', [
             'points' => $user->approvedPoints(),
             'profileComplete' => $user->profile?->isComplete() ?? false,
-            'skpi' => $user->skpiRequests()->latest()->first(),
+            'skpi' => $user->skpiRequests()->latest('id')->first(),
+            'issuedSkpis' => $user->skpiRequests()->where('status', 'issued')->latest('issued_at')->get(),
             'approvedSubmissions' => $user->submissions()->with('rule')->where('status', 'approved')->get(),
         ]);
     }
@@ -96,12 +97,20 @@ class StudentController extends Controller
             return back()->withErrors(['skpi' => 'Lengkapi seluruh data dokumen pada profil sebelum mengajukan SKPI.']);
         }
 
-        $activeRequest = $user->skpiRequests()->whereIn('status', ['pending', 'issued'])->exists();
-        if ($activeRequest) {
+        $created = DB::transaction(function () use ($user) {
+            $lockedUser = $user->newQuery()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if ($lockedUser->skpiRequests()->whereIn('status', ['pending', 'revision', 'failed'])->exists()) {
+                return false;
+            }
+
+            $lockedUser->skpiRequests()->create(['status' => 'pending']);
+
+            return true;
+        });
+
+        if (! $created) {
             return back()->withErrors(['skpi' => 'Anda sudah memiliki pengajuan SKPI aktif.']);
         }
-
-        $user->skpiRequests()->create(['status' => 'pending']);
 
         return back()->with('success', 'Pengajuan SKPI berhasil dikirim untuk diperiksa admin.');
     }
