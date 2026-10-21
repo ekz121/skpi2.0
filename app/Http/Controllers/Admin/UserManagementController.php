@@ -38,7 +38,14 @@ class UserManagementController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('admin.users.index', $this->formOptions() + compact('users'));
+        $userSummary = [
+            'total' => User::count(),
+            'active' => User::where('is_active', true)->count(),
+            'students' => User::where('role', 'student')->count(),
+            'staff' => User::whereIn('role', ['program_verifier', 'admin', 'leader'])->count(),
+        ];
+
+        return view('admin.users.index', $this->formOptions() + compact('users', 'userSummary'));
     }
 
     public function show(User $user)

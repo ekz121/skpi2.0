@@ -52,6 +52,12 @@ class AdminUserManagementTest extends TestCase
             ->assertSee($linked->email)
             ->assertSee('Akun belum tertaut ke daftar akademik')
             ->assertSee($unlinked->email);
+
+        $this->actingAs($admin)->get(route('admin.students'))
+            ->assertOk()
+            ->assertSee('Navigasi halaman')
+            ->assertSee('Halaman 1 dari 4')
+            ->assertSee('Menampilkan');
     }
 
     public function test_admin_can_send_an_email_configuration_test(): void

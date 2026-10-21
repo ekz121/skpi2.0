@@ -93,6 +93,8 @@ class AdminController extends Controller
             'submissions' => $query->paginate(25)->withQueryString(),
             'categories' => ActivityRule::where('is_active', true)->distinct()->orderBy('category')->pluck('category'),
             'newCount' => Submission::whereNull('admin_checked_at')->count(),
+            'checkedCount' => Submission::whereNotNull('admin_checked_at')->count(),
+            'certificateCount' => Submission::count(),
         ]);
     }
 
